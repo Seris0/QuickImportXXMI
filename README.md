@@ -1,7 +1,7 @@
 # XXMI Tool Quick Import
 
 ## Overview
-The script `XXMI_Tool_QuickImport_42.py` is a tool for Blender that facilitates quick importing of models and textures, adjusts vertices and vertex groups, and organizes objects into collections. This script includes specific functionalities for handling DDS files and organizing materials in Blender.
+The script `QuickImport` is a tool for Blender that facilitates quick importing of models and textures, adjusts vertices and vertex groups, and organizes objects into collections. This script includes specific functionalities for handling DDS files and organizing materials in Blender.
 
 ## Classes
 
@@ -13,6 +13,7 @@ This class defines configurable properties for quick import, including:
 - `reset_rotation`: Reset object rotation after import.
 - `apply_textures`: Apply materials and textures.
 - `create_collection`: Create a new collection based on the folder name.
+- `create_mesh_collection`: Setup for toggles 
 
 ### `TextureHandler`
 This class handles creating materials and importing textures:
