@@ -8,7 +8,7 @@ from .preferences import *
 class QuickImportBase:
     def post_import_processing(self, context, folder):
 
-        xxmi = context.window_manager.quick_import_settings
+        xxmi = context.scene.quick_import_settings
         imported_objects = [obj for obj in context.selected_objects if obj.type == 'MESH']
 
         if xxmi.reset_rotation:
@@ -188,7 +188,7 @@ class QuickImport(Import3DMigotoFrameAnalysis, QuickImportBase):
     bl_options = {"UNDO"}
 
     def execute(self, context):
-        cfg = context.window_manager.quick_import_settings
+        cfg = context.scene.quick_import_settings
         super().execute(context)
         folder = os.path.dirname(self.properties.filepath)
         print("------------------------")
@@ -215,7 +215,7 @@ class QuickImport(Import3DMigotoFrameAnalysis, QuickImportBase):
         if bpy.app.version < (4, 2, 0):
             importedmeshes = TextureHandler.create_material(context, texture_files, folder)
         else:
-            importedmeshes = TextureHandler42.create_material(context, files, folder)
+            importedmeshes = TextureHandler42.create_material(context, texture_files, folder)
 
         print(f"Imported meshes: {[obj.name for obj in importedmeshes]}")
 

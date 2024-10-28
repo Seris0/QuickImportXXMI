@@ -6,7 +6,7 @@ import importlib
 bl_info = {
     "name": "XXMI Scripts & Quick Import",
     "author": "Gustav0, LeoTorreZ", 
-    "version": (2, 9, 7),
+    "version": (2, 9, 8),
     "blender": (3, 6, 2),
     "description": "Script Compilation",
     "category": "Object",
@@ -25,16 +25,16 @@ def reload_package(module_dict_main):
     reload_package_recursive(Path(__file__).parent, module_dict_main)
 
 
-import bpy
-if "bpy" in locals(): #Type: ignore
+import bpy #type: ignore
+if "bpy" in locals(): 
     import importlib
     reload_package(locals())
 
 
 from .tools.tools_operators import classes as quick_import_classes, menu_func
-from .xxmi_scripts import QuickImportSettings, XXMI_Scripts_Settings, XXMI_TOOLS_PT_main_panel, XXMI_TOOLS_PT_quick_import_panel
-from .quickimport.operators import QuickImportRaw, QuickImport, menu_func_import, SavePreferencesOperator , load_preferences
-
+from .xxmi_scripts import * 
+from .quickimport.operators import *
+from .quickimport.preferences import *
 
 addon_keymaps = []
 xxmi_classes = [
@@ -54,8 +54,10 @@ def register():
         bpy.utils.register_class(cls)
 
     bpy.types.Scene.xxmi_scripts_settings = bpy.props.PointerProperty(type=XXMI_Scripts_Settings)
-    bpy.types.WindowManager.quick_import_settings = bpy.props.PointerProperty(type=QuickImportSettings)
-    load_preferences(bpy.context)
+    bpy.types.Scene.quick_import_settings = bpy.props.PointerProperty(type=QuickImportSettings)
+    preferences = load_preferences()
+    if preferences:
+        bpy.app.timers.register(lambda: apply_preferences(preferences, bpy.context), first_interval=1.0)
     
     bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
     bpy.types.VIEW3D_MT_object.append(menu_func)
@@ -78,7 +80,7 @@ def unregister():
         bpy.utils.unregister_class(cls)
     
     del bpy.types.Scene.xxmi_scripts_settings
-    del bpy.types.WindowManager.quick_import_settings
+    del bpy.types.Scene.quick_import_settings
     
     bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
     bpy.types.VIEW3D_MT_object.remove(menu_func)

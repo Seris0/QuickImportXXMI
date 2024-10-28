@@ -1,6 +1,6 @@
 import json
 import os
-
+import bpy #type: ignore
 
 def get_preferences_path():
     settings_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "user_settings")
@@ -8,7 +8,7 @@ def get_preferences_path():
     return os.path.join(settings_dir, "quickimport_preferences.json")
 
 def save_preferences(context):
-    prefs = context.window_manager.quick_import_settings
+    prefs = context.scene.quick_import_settings
     preferences = {
         "tri_to_quads": prefs.tri_to_quads,
         "merge_by_distance": prefs.merge_by_distance,
@@ -27,14 +27,20 @@ def save_preferences(context):
     with open(get_preferences_path(), 'w') as f:
         json.dump(preferences, f, indent=4)
 
-def load_preferences(context):
+def load_preferences():
     prefs_path = get_preferences_path()
     if os.path.exists(prefs_path):
         with open(prefs_path, 'r') as f:
             preferences = json.load(f)
             
-        if hasattr(context.window_manager, 'quick_import_settings'):
-            prefs = context.window_manager.quick_import_settings
+        # Store preferences to be loaded after Blender fully starts
+        return preferences
+    
+    return None
+
+def apply_preferences(preferences, context):         
+        if preferences and hasattr(bpy.context.scene, 'quick_import_settings'):
+            prefs = context.scene.quick_import_settings
             prefs.tri_to_quads = preferences.get("tri_to_quads", False)
             prefs.merge_by_distance = preferences.get("merge_by_distance", False) 
             prefs.reset_rotation = preferences.get("reset_rotation", False)

@@ -203,7 +203,7 @@ class XXMI_TOOLS_PT_quick_import_panel(bpy.types.Panel):
  
     def draw(self, context):
         layout = self.layout
-        cfg = context.window_manager.quick_import_settings
+        cfg = context.scene.quick_import_settings
 
         box = layout.box()
         col = box.column(align=True)
