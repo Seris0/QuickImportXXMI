@@ -385,7 +385,7 @@ class BaseAnalysis(Import3DMigotoFrameAnalysis):
 
 class QuickImport(Import3DMigotoFrameAnalysis, QuickImportBase):
     """Setup Character .txt file"""
-    bl_idname = "import_mesh.jasicbeoadus"
+    bl_idname = "import_scene.3dmigoto_frame_analysis"
     bl_label = "Quick Import for XXMI"
     bl_options = {"UNDO"}
     # bl_parent_id = "IMPORT_MESH_OT_migoto_frame_analysis"

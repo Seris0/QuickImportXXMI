@@ -214,7 +214,7 @@ class XXMI_TOOLS_PT_quick_import_panel(bpy.types.Panel):
         
         row = col.row(align=True)
         row.scale_y = 1.3
-        row.operator("import_mesh.jasicbeoadus", text="Setup Character", icon='IMPORT')
+        row.operator("import_scene.3dmigoto_frame_analysis", text="Setup Character", icon='IMPORT')
         row = col.row(align=True)
         row.scale_y = 1.3
         row.operator("import_scene.3dmigoto_raw", text="Setup Character Raw (ib + vb)", icon='IMPORT')
