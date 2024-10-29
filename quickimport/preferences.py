@@ -21,7 +21,9 @@ def save_preferences(context):
         "import_lightmap": prefs.import_lightmap,
         "import_normalmap": prefs.import_normalmap,
         "import_materialmap": prefs.import_materialmap,
-        "import_stockingmap": prefs.import_stockingmap
+        "import_stockingmap": prefs.import_stockingmap,
+        "import_face": prefs.import_face,
+        "import_armature": prefs.import_armature
     }
     
     with open(get_preferences_path(), 'w') as f:
@@ -53,4 +55,6 @@ def apply_preferences(preferences, context):
             prefs.import_normalmap = preferences.get("import_normalmap", False)
             prefs.import_materialmap = preferences.get("import_materialmap", False)
             prefs.import_stockingmap = preferences.get("import_stockingmap", False)
+            prefs.import_face = preferences.get("import_face", False)
+            prefs.import_armature = preferences.get("import_armature", False)
 

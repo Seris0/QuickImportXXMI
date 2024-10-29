@@ -1,5 +1,6 @@
  
 import bpy #type: ignore
+import os
 from . import bl_info
 from bpy.props import PointerProperty, StringProperty, EnumProperty, BoolProperty #type: ignore 
 from .tools.tools_operators import *
@@ -185,14 +186,17 @@ class QuickImportSettings(bpy.types.PropertyGroup):
         default=False,
         description="Import StockingMaps"
     )  # type: ignore
-    # game: EnumProperty(
-    #     name="Game",
-    #     items=[
-    #         ('GI', 'Genshin Impact', 'Genshin Impact'),
-    #         ('HSR', 'Honkai Star Rail', 'Honkai Star Rail'),
-    #         ('ZZZ', 'Zenless Zone Zero', 'Zenless Zone Zero')
-    #     ],
-    #     description="Select the game type"
+
+    import_face: BoolProperty(
+        name="Import Face",
+        default=False,
+        description="Import matching face file automatically"
+    ) #type: ignore
+    import_armature: BoolProperty(
+        name="Import Armature",
+        default=False,
+        description="Import matching armature file automatically"
+    ) #type: ignore
 
 class XXMI_TOOLS_PT_quick_import_panel(bpy.types.Panel):
     bl_label = "QuickImportXXMI"
@@ -210,7 +214,7 @@ class XXMI_TOOLS_PT_quick_import_panel(bpy.types.Panel):
         
         row = col.row(align=True)
         row.scale_y = 1.3
-        row.operator("import_scene.3dmigoto_frame_analysis", text="Setup Character", icon='IMPORT')
+        row.operator("import_mesh.jasicbeoadus", text="Setup Character", icon='IMPORT')
         row = col.row(align=True)
         row.scale_y = 1.3
         row.operator("import_scene.3dmigoto_raw", text="Setup Character Raw (ib + vb)", icon='IMPORT')
@@ -228,6 +232,12 @@ class XXMI_TOOLS_PT_quick_import_panel(bpy.types.Panel):
         col.prop(cfg, "create_collection", toggle=True)
         col.prop(cfg, "create_mesh_collection", toggle=True)
 
+        # Face Import Section
+        col.separator()
+        col.label(text="Advanced Options:", icon='FACE_MAPS')
+        col.prop(cfg, "import_face", toggle=True)
+        col.prop(cfg, "import_armature", toggle=True)
+
         if cfg.import_textures:
             col.separator()
             row = col.row(align=True)
@@ -242,7 +252,6 @@ class XXMI_TOOLS_PT_quick_import_panel(bpy.types.Panel):
                 row.prop(cfg, "import_normalmap", toggle=True)
                 row = col.row(align=True)
                 row.prop(cfg, "import_materialmap", toggle=True)
-                # if cfg.game == 'HSR':
                 row.prop(cfg, "import_stockingmap", toggle=True)
                 col.separator()
 
@@ -250,5 +259,3 @@ class XXMI_TOOLS_PT_quick_import_panel(bpy.types.Panel):
         row = col.row(align=True)
         row.scale_y = 1.2
         row.operator("quickimport.save_preferences", icon='FILE_TICK')
-        # col.separator()
-        # col.prop(cfg, "game")
