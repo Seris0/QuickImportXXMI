@@ -21,7 +21,7 @@ jobs:
       run: |
         mkdir QuickImportXXMI_Full
         shopt -s extglob
-        mv !(QuickImportXXMI_Full|QuickImportXXMI_NoResources) QuickImportXXMI_Full
+        mv !(QuickImportXXMI_Full|QuickImportXXMI_NoResources|QuickImportXXMI_Resources) QuickImportXXMI_Full
 
     - name: Create zip of full repository
       run: zip -r QuickImportXXMI_Full_${{ github.ref_name }}.zip QuickImportXXMI_Full
@@ -37,19 +37,49 @@ jobs:
     - name: Create zip of NoResources version
       run: zip -r QuickImportXXMI_NoResources_${{ github.ref_name }}.zip QuickImportXXMI_NoResources
 
+    # Resources Only Version
+    - name: Create Resources Only version
+      run: |
+        mkdir -p QuickImportXXMI_Resources/quickimport/resources
+        cp -r QuickImportXXMI_Full/quickimport/resources/faces QuickImportXXMI_Resources/quickimport/resources/
+        cp -r QuickImportXXMI_Full/quickimport/resources/armatures QuickImportXXMI_Resources/quickimport/resources/
+
+    - name: Create zip of Resources Only version
+      run: zip -r QuickImportXXMI_Resources_${{ github.ref_name }}.zip QuickImportXXMI_Resources
+
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
         files: |
           QuickImportXXMI_Full_${{ github.ref_name }}.zip
-          QuickImportXXMI_NoResources_${{ github.ref_name }}.zip
+          QuickImportXXMI_AddonOnly_${{ github.ref_name }}.zip
+          QuickImportXXMI_Resources_${{ github.ref_name }}.zip
         name: Release ${{ github.ref_name }}
         body: |
           See the [changelog](https://github.com/${{ github.repository }}/commits/${{ github.ref_name }}) for details.
           
-          This release includes two versions:
-          - Full version: Contains all resources
-          - NoResources version: Excludes faces and armatures resources
+          This release includes three versions:
+          
+          ### Full Version
+          - Contains the complete addon with all resources included
+          - Recommended for first-time users
+          - Includes all face and armature resources
+          
+          ### NoResources Version
+          - Contains only the addon without any face or armature resources
+          - Smaller download size
+          - Ideal for users who want to manage their own resources
+          - Perfect for updating the addon while keeping your existing resources
+          
+          ### Resources Only Version
+          - Contains only the face and armature resources
+          - Use this to update or replace your resources folder
+          
+          #### How to Replace Resources:
+          1. Download the Resources Only version
+          2. Navigate to your QuickImportXXMI addon folder
+          3. Replace the existing `/quickimport/resources` folder with the one from the downloaded zip
+          
         draft: false
         prerelease: false
       env:

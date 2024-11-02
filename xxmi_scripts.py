@@ -4,6 +4,7 @@ import os
 from . import bl_info
 from bpy.props import PointerProperty, StringProperty, EnumProperty, BoolProperty #type: ignore 
 from .tools.tools_operators import *
+from . import addon_updater_ops
 
 class XXMI_TOOLS_PT_main_panel(bpy.types.Panel):
     bl_label = "ToolsXXMI"
@@ -11,6 +12,7 @@ class XXMI_TOOLS_PT_main_panel(bpy.types.Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_category = 'XXMI Scripts'
+    bl_options = {'DEFAULT_CLOSED'}
     
     def draw(self, context):
         layout = self.layout
@@ -197,6 +199,11 @@ class QuickImportSettings(bpy.types.PropertyGroup):
         default=False,
         description="Import matching armature file automatically"
     ) #type: ignore
+    hide_advanced: BoolProperty(
+        name="Hide Advanced",
+        default=False,
+        description="Hide Advanced Settings"
+    ) #type: ignore
 
 class XXMI_TOOLS_PT_quick_import_panel(bpy.types.Panel):
     bl_label = "QuickImportXXMI"
@@ -234,16 +241,22 @@ class XXMI_TOOLS_PT_quick_import_panel(bpy.types.Panel):
 
         # Face Import Section
         col.separator()
-        col.label(text="Advanced Options:", icon='FACE_MAPS')
-        col.prop(cfg, "import_face", toggle=True)
-        col.prop(cfg, "import_armature", toggle=True)
+        row = col.row(align=True)
+        row.label(text="Advanced Import:", icon='FACE_MAPS')
+        row.prop(cfg, "hide_advanced", text="Show Advanced Import" if cfg.hide_advanced else "Hide Advanced Import", 
+                 icon='HIDE_OFF' if cfg.hide_advanced else 'HIDE_ON', toggle=True)
+        
+        if cfg.hide_advanced:
+            col.prop(cfg, "import_face", toggle=True)
+            col.prop(cfg, "import_armature", toggle=True)
 
         if cfg.import_textures:
             col.separator()
             row = col.row(align=True)
             row.label(text="Texture Import:", icon='TEXTURE')
-            row.prop(cfg, "hide_textures", text="Show Texture Options" if cfg.hide_textures else "Hide Texture Options", icon='HIDE_OFF' if cfg.hide_textures else 'HIDE_ON', toggle=True)
-
+            row.prop(cfg, "hide_textures", text="Show Texture Settings" if cfg.hide_textures else " Hide Texture Settings",
+                      icon='HIDE_OFF' if cfg.hide_textures else 'HIDE_ON', toggle=True)
+            
             if cfg.hide_textures:
                 row = col.row(align=True)
                 row.prop(cfg, "import_diffuse", toggle=True)
@@ -259,3 +272,80 @@ class XXMI_TOOLS_PT_quick_import_panel(bpy.types.Panel):
         row = col.row(align=True)
         row.scale_y = 1.2
         row.operator("quickimport.save_preferences", icon='FILE_TICK')
+
+class DemoUpdaterPanel(bpy.types.Panel):
+	"""Panel to demo popup notice and ignoring functionality"""
+	bl_label = "AutoUpdaterXXMI"
+	bl_idname = "OBJECT_PT_DemoUpdaterPanel_hello"
+	bl_space_type = 'VIEW_3D'
+	bl_region_type = 'TOOLS' if bpy.app.version < (2, 80) else 'UI'
+	bl_context = "objectmode"
+	bl_category = "XXMI Scripts"
+	bl_options = {'DEFAULT_CLOSED'}
+
+	def draw(self, context: bpy.types.Context) -> None:
+		addon_updater_ops.update_settings_ui(self, context)
+
+
+@addon_updater_ops.make_annotations
+class UpdaterPreferences(bpy.types.AddonPreferences):
+	"""Demo bare-bones preferences"""
+	bl_idname = __package__
+
+	# Addon updater preferences.
+
+	auto_check_update = bpy.props.BoolProperty(
+		name="Auto-check for Update",
+		description="If enabled, auto-check for updates using an interval",
+		default=False)
+
+	updater_interval_months = bpy.props.IntProperty(
+		name='Months',
+		description="Number of months between checking for updates",
+		default=0,
+		min=0)
+
+	updater_interval_days = bpy.props.IntProperty(
+		name='Days',
+		description="Number of days between checking for updates",
+		default=7,
+		min=0,
+		max=31)
+
+	updater_interval_hours = bpy.props.IntProperty(
+		name='Hours',
+		description="Number of hours between checking for updates",
+		default=0,
+		min=0,
+		max=23)
+
+	updater_interval_minutes = bpy.props.IntProperty(
+		name='Minutes',
+		description="Number of minutes between checking for updates",
+		default=0,
+		min=0,
+		max=59)
+
+	def draw(self, context: bpy.types.Context) -> None:
+		addon_updater_ops.update_settings_ui(self, context)
+# 	def draw(self, context):
+# 		layout = self.layout
+
+# 		# Works best if a column, or even just self.layout.
+# 		mainrow = layout.row()
+# 		col = mainrow.column()
+
+# 		# Updater draw function, could also pass in col as third arg.
+# 		addon_updater_ops.update_settings_ui(self, context)
+
+# 		# Alternate draw function, which is more condensed and can be
+# 		# placed within an existing draw function. Only contains:
+# 		#   1) check for update/update now buttons
+# 		#   2) toggle for auto-check (interval will be equal to what is set above)
+# 		# addon_updater_ops.update_settings_ui_condensed(self, context, col)
+
+# 		# Adding another column to help show the above condensed ui as one column
+# 		# col = mainrow.column()
+# 		# col.scale_y = 2
+# 		# ops = col.operator("wm.url_open","Open webpage ")
+# 		# ops.url=addon_updater_ops.updater.website

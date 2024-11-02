@@ -4,6 +4,7 @@ import os
 from .. import_xxmi_tools import Import3DMigotoFrameAnalysis, Import3DMigotoRaw
 from .texturehandling import TextureHandler, TextureHandler42
 from .preferences import *
+import re
 
 class QuickImportBase:
     def post_import_processing(self, context, folder):
@@ -38,10 +39,10 @@ class QuickImportBase:
 
         if xxmi.import_armature:
             self.import_armature(context)
-
+            
         if xxmi.create_mesh_collection:
             self.create_mesh_collection(context, folder)
-            
+      
         bpy.ops.object.select_all(action='DESELECT')
         
     def assign_existing_materials(self, new_meshes):
@@ -162,6 +163,13 @@ class QuickImportBase:
                         print(f"Moved {obj.name} to collection {name} as {ob.name}.")
                         obj.name = obj.name.rsplit("-", 1)[0] + "-KeepEmpty"
                         print(f"{obj.name} maintains custom properties, don't delete.")
+
+                        # Move any existing armature modifiers from the empty to the new mesh
+                        for mod in obj.modifiers:
+                            if mod.type == 'ARMATURE':
+                                new_mod = ob.modifiers.new(name="Armature", type='ARMATURE')
+                                new_mod.object = mod.object
+                                obj.modifiers.remove(mod)
                     else:
                         print(f"Skipping vertex removal for non-mesh object {obj.name}")
 
@@ -195,7 +203,80 @@ class QuickImportBase:
         for area in context.screen.areas:
             if area.type == 'VIEW_3D':
                 area.spaces.active.shading.type = 'MATERIAL'
+        
+        # if bpy.app.version >= (4, 2, 0):
+        #     bpy.data.scenes["Scene"].view_settings.view_transform = 'Khronos PBR Neutral'
 
+    def import_armature(self, context):
+        try:
+            # Step 1: Track the original selection
+            previously_selected = set(bpy.context.selected_objects)
+
+            # Step 2: Filter out objects in "Face" collection or those with '-KeepEmpty' in their name
+            body_objects = [
+                obj for obj in previously_selected 
+                if obj.type == 'MESH' and not any(col.name == 'Face' for col in obj.users_collection) and '-KeepEmpty' not in obj.name
+            ]
+            
+            # If no valid body objects, raise an error
+            if not body_objects:
+                raise Exception("No valid body objects selected for armature import")
+            
+            # Step 3: Select the first body object to use as reference for armature import
+            obj = body_objects[0]  
+            bpy.ops.object.select_all(action='DESELECT')
+            obj.select_set(True)
+            context.view_layer.objects.active = obj
+            
+            # Step 4: Import the armature file
+            original_selection = set(bpy.context.selected_objects)
+            bpy.ops.import_scene.armature_file()
+            newly_imported = set(bpy.context.selected_objects) - original_selection
+            
+            # Step 5: Identify the armature among the imported objects
+            armature = next((obj for obj in newly_imported if obj.type == 'ARMATURE'), None)
+            if not armature:
+                raise Exception("No armature found in imported objects")
+            
+            # Step 6: Add the armature modifier only to valid meshes
+            for obj in previously_selected:
+                # Apply armature modifier only if not in Face collection and not '-KeepEmpty'
+                if obj.type == 'MESH' and not any(col.name == 'Face' for col in obj.users_collection) and '-KeepEmpty' not in obj.name:
+                    # Get base name without file extension and hash
+                    obj_base_name = obj.name.split('-')[0].split('=')[0]
+                    
+                    # Find matching armature by name similarity
+                    matching_armature = None
+                    for imported_obj in newly_imported:
+                        if imported_obj.type == 'ARMATURE':
+                            # Convert armature name to match mesh naming pattern
+                            armature_base = imported_obj.name.replace('_', '')
+                            # Remove any of the special keywords from mesh name
+                            mesh_base = obj_base_name
+                            for keyword in ['Body', 'Head', 'Extra', 'Dress']:
+                                mesh_base = mesh_base.replace(keyword, '')
+                            
+                            if armature_base.lower().startswith(mesh_base.lower()):
+                                matching_armature = imported_obj
+                                break
+                    
+                    if matching_armature:
+                        mod = obj.modifiers.new(name="Armature", type='ARMATURE')
+                        mod.object = matching_armature
+
+            # Step 7: Restore the selection to include newly imported objects and previously selected objects
+            for obj in newly_imported:
+                obj.select_set(True)
+            for obj in previously_selected:
+                if obj not in newly_imported:  
+                    obj.select_set(True)
+                    
+        except Exception as e:
+            self.report({'ERROR'}, f"Armature import failed: {str(e)}")
+            for obj in previously_selected:
+                obj.select_set(True)
+
+                
     def import_face(self, context):
         try:
             previously_selected = set(bpy.context.selected_objects)
@@ -219,8 +300,7 @@ class QuickImportBase:
             for obj in newly_imported:
                 # Remove from current collections
                 for col in obj.users_collection:
-                    col.objects.unlink(obj)
-                # Add to Face collection    
+                    col.objects.unlink(obj)   
                 face_collection.objects.link(obj)
                 obj.select_set(True)
 
@@ -233,90 +313,40 @@ class QuickImportBase:
             for obj in previously_selected:
                 obj.select_set(True)
 
-    def import_armature(self, context):
-        try:
-            previously_selected = set(bpy.context.selected_objects)
-            
-            if previously_selected:
-                obj = list(previously_selected)[0]
-                bpy.ops.object.select_all(action='DESELECT')
-                obj.select_set(True)
-                context.view_layer.objects.active = obj
-            
-            # Store original selection before importing face
-            original_selection = set(bpy.context.selected_objects)
-            
-            # Import armature
-            bpy.ops.import_scene.armature_file()
-            newly_imported = set(bpy.context.selected_objects) - original_selection
-            
-            if not newly_imported:
-                raise Exception("No armature was found to import")
-                
-            # Select newly imported objects
-            for obj in newly_imported:
-                obj.select_set(True)
-                
-            # Restore original selection
-            for obj in previously_selected:
-                obj.select_set(True)
-                
-        except Exception as e:
-            self.report({'ERROR'}, f"Armature import failed: {str(e)}")
-            for obj in previously_selected:
-                obj.select_set(True)
-                
-class QuickImportFace(bpy.types.Operator):
-    bl_idname = "import_scene.face_file"
-    bl_label = "Import Face"
-    bl_description = "Import matching face file"
+
+# Common name mappings and parts used across operators
+CHARACTER_NAME_MAPPING = {
+    "AratakiItto": "Itto",
+    "Arataki": "Itto", 
+    "TravelerBoy": "Aether",
+    "TravelerMale": "Aether",
+    "KamisatoAyaka": "Ayaka",
+    "KamisatoAyato": "Ayato",
+    "Raiden": "RaidenShogun",
+    "Shogun": "RaidenShogun",
+    "TravelerGirl": "Lumine",
+    "TravelerFemale": "Lumine",
+    "SangonomiyaKokomi": "Kokomi",
+    "KaedeharaKazuha": "Kazuha",
+    "Kaedehara": "Kazuha",
+    "Yae": "YaeMiko",
+    "FischlSkin": "FischlHighness",
+    "NingguangSkin": "NingguangOrchid",
+    "MonaGlobal": "Mona",
+    "Tartaglia": "Childe",
+    "BarbaraSkin": "BarbaraSummertime",
+    "DilucSkin": "DilucFlamme",
+    "DilucFlames": "DilucFlamme",
+    "KiraraSkin": "KiraraBoots",
+    "Kujou": "KujouSara",
+    "Sara": "KujouSara",
+    "Kuki": "Shinobu",
+    "KukiShinobu": "Shinobu",
     
-    def execute(self, context):
-        try:
-            self.post_import_processing(context)
-        except FileNotFoundError as e:
-            self.report({'ERROR'}, f"File not found: {str(e)}")
-            return {'CANCELLED'}
-        except Exception as e:
-            self.report({'ERROR'}, str(e))
-            return {'CANCELLED'}
-        return {'FINISHED'}
-    
-    def post_import_processing(self, context):
-        script_dir = os.path.dirname(os.path.realpath(__file__))
-        faces_dir = os.path.join(script_dir, "resources", "faces")
-        
-        if not os.path.exists(faces_dir):
-            raise FileNotFoundError(f"Faces directory not found at: {faces_dir}")
-        
-        selected_objects = context.selected_objects
-        if not selected_objects:
-            raise Exception("No object selected")
-        
-        obj_name = selected_objects[0].name.split('-')[0].split('=')[0]
-        if not obj_name:
-            raise Exception("Invalid object name")
-        
-        common_parts = ['Body', 'Head', 'Arm', 'Leg', 'Dress', 'Extra', 'Extras', 'Hair', 'Mask', 'Idle']
-        base_name = next((obj_name.split(part)[0] for part in common_parts if part in obj_name), obj_name)
-        
-        matching_files = [f for f in os.listdir(faces_dir) 
-                          if base_name.lower() in f.lower() and f.endswith('.blend')]
-        
-        if not matching_files:
-            raise FileNotFoundError(f"No matching face file found for {base_name} in {faces_dir}")
-        
-        face_path = os.path.join(faces_dir, matching_files[0])
-        if not os.path.isfile(face_path):
-            raise FileNotFoundError(f"Face file not found at: {face_path}")
-            
-        with bpy.data.libraries.load(face_path) as (data_from, data_to):
-            data_to.objects = [name for name in data_from.objects]
-      
-        for obj in data_to.objects:
-            if obj is not None:
-                context.scene.collection.objects.link(obj)
-                obj.select_set(True)
+    # "FurinaPonytail": "Furina"
+}
+
+COMMON_PARTS = ['PonyTail', 'Body', 'Head', 'Arm', 'Leg', 'Dress', 'Extra', 'Extras', 'Hair', 'Mask', 'Idle', 'Eyes', 'Coat', 'JacketHead', 'JacketBody', 'Jacket']
 
 
 class QuickImportArmature(bpy.types.Operator):
@@ -352,8 +382,19 @@ class QuickImportArmature(bpy.types.Operator):
         if not obj_name:
             raise Exception("Invalid object name")
         
-        common_parts = ['Body', 'Head', 'Arm', 'Leg', 'Dress', 'Extra', 'Extras', 'Hair', 'Mask', 'Idle', 'Eyes']
-        base_name = next((obj_name.split(part)[0] for part in common_parts if part in obj_name), obj_name)
+        # Sort COMMON_PARTS by length in descending order to match longest parts first
+        sorted_parts = sorted(COMMON_PARTS, key=len, reverse=True)
+        
+        # First try to find any common parts in the name
+        base_name = obj_name
+        for part in sorted_parts:
+            if part.lower() in obj_name.lower():
+                # Get everything before the part
+                base_name = re.split(part, obj_name, flags=re.IGNORECASE)[0]
+                break
+        
+        # Handle special character name cases
+        base_name = CHARACTER_NAME_MAPPING.get(base_name, base_name)
         
         # Don't try to import armature for Face collection
         if base_name == "Face":
@@ -362,11 +403,18 @@ class QuickImportArmature(bpy.types.Operator):
         if not base_name:
             raise Exception("Could not determine base name")
         
-        armature_file = f"{base_name}.blend"
-        armature_path = os.path.join(armatures_dir, armature_file)
+        # Find files that match the base name up until "Armature" and end with .blend
+        matching_files = [
+            f for f in os.listdir(armatures_dir)
+            if f.endswith('.blend') 
+            and (armature_idx := f.lower().find('armature')) != -1
+            and f[:armature_idx].lower() == base_name.lower()
+        ]
         
-        if not os.path.isfile(armature_path):
-            raise FileNotFoundError(f"Armature file not found at: {armature_path}")
+        if not matching_files:
+            raise FileNotFoundError(f"No matching armature file found for {base_name} in {armatures_dir}")
+            
+        armature_path = os.path.join(armatures_dir, matching_files[0])
             
         with bpy.data.libraries.load(armature_path) as (data_from, data_to):
             armature_objects = [name for name in data_from.objects if 'Armature' in name]
@@ -377,8 +425,87 @@ class QuickImportArmature(bpy.types.Operator):
         for obj in data_to.objects:
             if obj is not None:
                 context.scene.collection.objects.link(obj)
-
                 obj.select_set(True)
+                
+class QuickImportFace(bpy.types.Operator):
+    bl_idname = "import_scene.face_file"
+    bl_label = "Import Face"
+    bl_description = "Import matching face file"
+    
+    # Special face-specific name mappings
+    FACE_NAME_MAPPING = {
+        "JeanCN": "Jean",
+        "JeanSea": "Jean", 
+        "JeanSkin": "Jean",
+        "KaeyaSailwind": "Kaeya",
+        "KeQingSkin": "Keqing",
+        "KeQingOpulent": "Keqing",
+        "KeQingOpulentSplendor": "Keqing",
+        "ShenheFrostFlower": "Shenhe",
+        "ShenheFlower": "Shenhe"
+    }
+    
+    def execute(self, context):
+        try:
+            self.post_import_processing(context)
+        except FileNotFoundError as e:
+            self.report({'ERROR'}, f"File not found: {str(e)}")
+            return {'CANCELLED'}
+        except Exception as e:
+            self.report({'ERROR'}, str(e))
+            return {'CANCELLED'}
+        return {'FINISHED'}
+    
+    def post_import_processing(self, context):
+        script_dir = os.path.dirname(os.path.realpath(__file__))
+        faces_dir = os.path.join(script_dir, "resources", "faces")
+        
+        if not os.path.exists(faces_dir):
+            raise FileNotFoundError(f"Faces directory not found at: {faces_dir}")
+        
+        selected_objects = context.selected_objects
+        if not selected_objects:
+            raise Exception("No object selected")
+        
+        obj_name = selected_objects[0].name.split('-')[0].split('=')[0]
+        if not obj_name:
+            raise Exception("Invalid object name")
+        
+        # Sort COMMON_PARTS by length in descending order to match longest parts first
+        sorted_parts = sorted(COMMON_PARTS, key=len, reverse=True)
+        
+        # First try to find any common parts in the name
+        base_name = obj_name
+        for part in sorted_parts:
+            if part.lower() in obj_name.lower():
+                # Get everything before the part
+                base_name = re.split(part, obj_name, flags=re.IGNORECASE)[0]
+                break
+        
+        # First check face-specific mappings, then fall back to general mappings
+        base_name = self.FACE_NAME_MAPPING.get(base_name, CHARACTER_NAME_MAPPING.get(base_name, base_name))
+        
+        if not base_name:
+            raise Exception("Could not determine base name")
+        
+        matching_files = [f for f in os.listdir(faces_dir) 
+                          if base_name.lower() in f.lower() and f.endswith('.blend')]
+        
+        if not matching_files:
+            raise FileNotFoundError(f"No matching face file found for {base_name} in {faces_dir}")
+        
+        face_path = os.path.join(faces_dir, matching_files[0])
+        if not os.path.isfile(face_path):
+            raise FileNotFoundError(f"Face file not found at: {face_path}")
+            
+        with bpy.data.libraries.load(face_path) as (data_from, data_to):
+            data_to.objects = [name for name in data_from.objects]
+      
+        for obj in data_to.objects:
+            if obj is not None:
+                context.scene.collection.objects.link(obj)
+                obj.select_set(True)
+
 
 class BaseAnalysis(Import3DMigotoFrameAnalysis):
     pass    
@@ -388,11 +515,7 @@ class QuickImport(Import3DMigotoFrameAnalysis, QuickImportBase):
     bl_idname = "import_scene.3dmigoto_frame_analysis"
     bl_label = "Quick Import for XXMI"
     bl_options = {"UNDO"}
-    # bl_parent_id = "IMPORT_MESH_OT_migoto_frame_analysis"
 
-    # @classmethod
-    # def poll(cls, context):
-    #     return True 
     def execute(self, context):
         cfg = context.scene.quick_import_settings
         super().execute(context)
@@ -473,3 +596,5 @@ class SavePreferencesOperator(bpy.types.Operator):
 def menu_func_import(self, context):
     self.layout.operator(QuickImport.bl_idname, text="Quick Import for XXMI")   
     self.layout.operator(QuickImportRaw.bl_idname, text="Quick Import Raw for XXMI")
+
+
