@@ -21,9 +21,9 @@ jobs:
       run: |
         mkdir QuickImportXXMI_Full
         shopt -s extglob
-        mv !(QuickImportXXMI_Full|QuickImportXXMI_NoResources|QuickImportXXMI_Resources) QuickImportXXMI_Full
+        mv !(QuickImportXXMI_Full|QuickImportXXMI_NoResources|QuickImportXXMI_Resources|QuickImportXXMI_AddonOnly) QuickImportXXMI_Full
 
-    - name: Create zip of full repository
+    - name: Create zip of Full Version
       run: zip -r QuickImportXXMI_Full_${{ github.ref_name }}.zip QuickImportXXMI_Full
 
     # No Resources Version
@@ -31,18 +31,26 @@ jobs:
       run: |
         mkdir -p QuickImportXXMI_NoResources
         cp -r QuickImportXXMI_Full/* QuickImportXXMI_NoResources/
-        rm -rf QuickImportXXMI_NoResources/quickimport/resources/faces
-        rm -rf QuickImportXXMI_NoResources/quickimport/resources/armatures
+        rm -rf QuickImportXXMI_NoResources/quickimport/resources
 
     - name: Create zip of NoResources version
       run: zip -r QuickImportXXMI_NoResources_${{ github.ref_name }}.zip QuickImportXXMI_NoResources
+
+    # Addon Only Version (No Resources and without additional folders)
+    - name: Create Addon Only version
+      run: |
+        mkdir -p QuickImportXXMI_AddonOnly
+        cp -r QuickImportXXMI_Full/* QuickImportXXMI_AddonOnly/
+        rm -rf QuickImportXXMI_AddonOnly/quickimport/resources
+
+    - name: Create zip of Addon Only version
+      run: zip -r QuickImportXXMI_AddonOnly_${{ github.ref_name }}.zip QuickImportXXMI_AddonOnly
 
     # Resources Only Version
     - name: Create Resources Only version
       run: |
         mkdir -p QuickImportXXMI_Resources/quickimport/resources
-        cp -r QuickImportXXMI_Full/quickimport/resources/faces QuickImportXXMI_Resources/quickimport/resources/
-        cp -r QuickImportXXMI_Full/quickimport/resources/armatures QuickImportXXMI_Resources/quickimport/resources/
+        cp -r QuickImportXXMI_Full/quickimport/resources/* QuickImportXXMI_Resources/quickimport/resources/
 
     - name: Create zip of Resources Only version
       run: zip -r QuickImportXXMI_Resources_${{ github.ref_name }}.zip QuickImportXXMI_Resources
@@ -52,6 +60,7 @@ jobs:
       with:
         files: |
           QuickImportXXMI_Full_${{ github.ref_name }}.zip
+          QuickImportXXMI_NoResources_${{ github.ref_name }}.zip
           QuickImportXXMI_AddonOnly_${{ github.ref_name }}.zip
           QuickImportXXMI_Resources_${{ github.ref_name }}.zip
         name: Release ${{ github.ref_name }}
