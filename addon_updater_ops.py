@@ -216,15 +216,6 @@ class AddonUpdaterCheckNow(bpy.types.Operator):
                                    hours=settings.updater_interval_hours,
                                    minutes=settings.updater_interval_minutes)
         Updater.check_for_update_now(ui_refresh)
-        python_executable = bpy.app.binary_path_python if bpy.app.version < (3, 0, 0) else sys.executable
-        try:
-            import pip
-            call([python_executable, '-m', 'pip', 'install', 'pip', '--user', '--upgrade'], shell=True)
-            call([python_executable, '-m', 'pip', 'install', 'Pillow', '--user', '--upgrade'], shell=True)
-        except ImportError:
-            call([python_executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'operators',
-                                                  'get-pip.py'), '--user'], shell=True)
-            call([python_executable, '-m', 'pip', 'install', 'Pillow', '--user', '--upgrade'], shell=True)
         return {'FINISHED'}
 
 
