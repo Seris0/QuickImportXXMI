@@ -26,16 +26,6 @@ jobs:
     - name: Create zip of Full Version
       run: zip -r QuickImportXXMI_Full_${{ github.ref_name }}.zip QuickImportXXMI_Full
 
-    # No Resources Version
-    - name: Create NoResources version
-      run: |
-        mkdir -p QuickImportXXMI_NoResources
-        cp -r QuickImportXXMI_Full/* QuickImportXXMI_NoResources/
-        rm -rf QuickImportXXMI_NoResources/quickimport/resources
-
-    - name: Create zip of NoResources version
-      run: zip -r QuickImportXXMI_NoResources_${{ github.ref_name }}.zip QuickImportXXMI_NoResources
-
     # Addon Only Version (No Resources and without additional folders)
     - name: Create Addon Only version
       run: |
@@ -60,7 +50,6 @@ jobs:
       with:
         files: |
           QuickImportXXMI_Full_${{ github.ref_name }}.zip
-          QuickImportXXMI_NoResources_${{ github.ref_name }}.zip
           QuickImportXXMI_AddonOnly_${{ github.ref_name }}.zip
           QuickImportXXMI_Resources_${{ github.ref_name }}.zip
         name: Release ${{ github.ref_name }}
@@ -87,7 +76,7 @@ jobs:
           #### How to Replace Resources:
           1. Download the Resources Only version
           2. Navigate to your QuickImportXXMI addon folder
-          3. Replace the existing `/quickimport/resources` folder with the one from the downloaded zip
+          3. Replace the existing `%appdata%\Blender Foundation\Blender\<Vers\scripts\addons` folder with the one from the downloaded zip
           
         draft: false
         prerelease: false
