@@ -24,7 +24,7 @@ jobs:
         mv !(QuickImportXXMI_Full|QuickImportXXMI_NoResources|QuickImportXXMI_Resources|QuickImportXXMI_AddonOnly) QuickImportXXMI_Full
 
     - name: Create zip of Full Version
-      run: zip -r QuickImportXXMI_Full_${{ github.ref_name }}.zip QuickImportXXMI_Full
+      run: zip -r 1_QuickImportXXMI_Full_${{ github.ref_name }}.zip QuickImportXXMI_Full
 
     # Addon Only Version (No Resources and without additional folders)
     - name: Create Addon Only version
@@ -34,7 +34,7 @@ jobs:
         rm -rf QuickImportXXMI_AddonOnly/quickimport/resources
 
     - name: Create zip of Addon Only version
-      run: zip -r QuickImportXXMI_AddonOnly_${{ github.ref_name }}.zip QuickImportXXMI_AddonOnly
+      run: zip -r 2_QuickImportXXMI_AddonOnly_${{ github.ref_name }}.zip QuickImportXXMI_AddonOnly
 
     # Resources Only Version
     - name: Create Resources Only version
@@ -43,15 +43,15 @@ jobs:
         cp -r QuickImportXXMI_Full/quickimport/resources/* QuickImportXXMI_Resources/quickimport/resources/
 
     - name: Create zip of Resources Only version
-      run: zip -r QuickImportXXMI_Resources_${{ github.ref_name }}.zip QuickImportXXMI_Resources
+      run: zip -r 3_QuickImportXXMI_Resources_${{ github.ref_name }}.zip QuickImportXXMI_Resources
 
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
         files: |
-          QuickImportXXMI_Full_${{ github.ref_name }}.zip
-          QuickImportXXMI_AddonOnly_${{ github.ref_name }}.zip
-          QuickImportXXMI_Resources_${{ github.ref_name }}.zip
+          1_QuickImportXXMI_Full_${{ github.ref_name }}.zip
+          2_QuickImportXXMI_AddonOnly_${{ github.ref_name }}.zip
+          3_QuickImportXXMI_Resources_${{ github.ref_name }}.zip
         name: Release ${{ github.ref_name }}
         body: |
           See the [changelog](https://github.com/${{ github.repository }}/commits/${{ github.ref_name }}) for details.
@@ -76,7 +76,7 @@ jobs:
           #### How to Replace Resources:
           1. Download the Resources Only version
           2. Navigate to your QuickImportXXMI addon folder
-          3. Replace the existing `%appdata%\Blender Foundation\Blender\<Vers\scripts\addons` folder with the one from the downloaded zip
+          3. Replace the existing `/quickimport/resources` folder with the one from the downloaded zip
           
         draft: false
         prerelease: false
