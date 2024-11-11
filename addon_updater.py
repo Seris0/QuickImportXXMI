@@ -885,18 +885,15 @@ class SingletonUpdater:
         # Clear the existing source folder in case previous files remain.
         outdir = os.path.join(self._updater_path, "source")
         try:
-            if os.path.exists(outdir):
-                shutil.rmtree(outdir)
-                self.print_verbose("Source folder cleared")
-        except Exception as err:
-            print("Error removing source folder:")
-            print(str(err))
+            shutil.rmtree(outdir)
+            self.print_verbose("Source folder cleared")
+        except:
             self.print_trace()
 
         # Create parent directories if needed, would not be relevant unless
         # installing addon into another location or via an addon manager.
         try:
-            os.makedirs(outdir, exist_ok=True)
+            os.mkdir(outdir)
         except Exception as err:
             print("Error occurred while making extract dir:")
             print(str(err))
@@ -934,7 +931,7 @@ class SingletonUpdater:
                 sub_path = name[name.index(zsep) + 1:]
                 if name.endswith(zsep):
                     try:
-                        os.makedirs(os.path.join(outdir, sub_path), exist_ok=True)
+                        os.mkdir(os.path.join(outdir, sub_path))
                         self.print_verbose(
                             "Extract - mkdir: " + os.path.join(outdir, sub_path))
                     except OSError as exc:
@@ -993,17 +990,6 @@ class SingletonUpdater:
         self.save_updater_json()
         self.reload_addon()
         self._update_ready = False
-
-        # Clean up source folder
-        try:
-            if os.path.exists(outdir):
-                shutil.rmtree(outdir)
-                self.print_verbose("Source folder removed after successful update")
-        except Exception as err:
-            print("Error removing source folder after update:")
-            print(str(err))
-            self.print_trace()
-
         return 0
 
     def deep_merge_directory(self, base, merger, clean=False):
@@ -1115,8 +1101,7 @@ class SingletonUpdater:
 
         # now remove the temp staging folder and downloaded zip
         try:
-            if os.path.exists(staging_path):
-                shutil.rmtree(staging_path)
+            shutil.rmtree(staging_path)
         except:
             error = ("Error: Failed to remove existing staging directory, "
                      "consider manually removing ") + staging_path
