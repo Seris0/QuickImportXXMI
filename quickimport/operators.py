@@ -442,7 +442,9 @@ class QuickImportFace(bpy.types.Operator):
         "KeQingOpulent": "Keqing",
         "KeQingOpulentSplendor": "Keqing",
         "ShenheFrostFlower": "Shenhe",
-        "ShenheFlower": "Shenhe"
+        "ShenheFlower": "Shenhe",
+        "NilouBreeze": "Nilou",
+        "NilouSkin": "Nilou",
     }
     
     def execute(self, context):
