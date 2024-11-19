@@ -1056,7 +1056,7 @@ def register(bl_info):
     Updater.backup_current = False
     Updater.backup_ignore_patterns = ["*"]
     Updater.overwrite_patterns = ["*"]
-    Updater.remove_pre_update_patterns = []
+    Updater.remove_pre_update_patterns = ["*"]
     Updater.include_branches = False
     Updater.use_releases = False
     Updater.include_branch_list = None

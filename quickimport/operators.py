@@ -1,7 +1,7 @@
 
 import bpy #type: ignore
 import os
-from .. import_xxmi_tools import Import3DMigotoFrameAnalysis, Import3DMigotoRaw
+from .modules.operators import QuickImportXXMIFrameAnalysis, QuickImport3DMigotoRaw
 from .texturehandling import TextureHandler, TextureHandler42
 from .preferences import *
 import re
@@ -442,9 +442,7 @@ class QuickImportFace(bpy.types.Operator):
         "KeQingOpulent": "Keqing",
         "KeQingOpulentSplendor": "Keqing",
         "ShenheFrostFlower": "Shenhe",
-        "ShenheFlower": "Shenhe",
-        "NilouBreeze": "Nilou",
-        "NilouSkin": "Nilou",
+        "ShenheFlower": "Shenhe"
     }
     
     def execute(self, context):
@@ -508,11 +506,7 @@ class QuickImportFace(bpy.types.Operator):
                 context.scene.collection.objects.link(obj)
                 obj.select_set(True)
 
-
-class BaseAnalysis(Import3DMigotoFrameAnalysis):
-    pass    
-
-class QuickImport(Import3DMigotoFrameAnalysis, QuickImportBase):
+class QuickImport(QuickImportXXMIFrameAnalysis, QuickImportBase):
     """Setup Character .txt file"""
     bl_idname = "import_scene.3dmigoto_frame_analysis"
     bl_label = "Quick Import for XXMI"
@@ -555,7 +549,7 @@ class QuickImport(Import3DMigotoFrameAnalysis, QuickImportBase):
 
         return {"FINISHED"}
 
-class QuickImportRaw(Import3DMigotoRaw, QuickImportBase):
+class QuickImportRaw(QuickImport3DMigotoRaw, QuickImportBase):
     """Setup Character file with raw data .IB + .VB"""
     bl_idname = "import_scene.3dmigoto_raw"
     bl_label = "Quick Import Raw for XXMI"

@@ -22,8 +22,7 @@ xxmi_classes = [
     UpdaterPreferences,
     QuickImportRaw,
     QuickImportArmature, 
-    SavePreferencesOperator,
-    BaseAnalysis,  
+    SavePreferencesOperator, 
 ]
 
 # Consolidate all classes
