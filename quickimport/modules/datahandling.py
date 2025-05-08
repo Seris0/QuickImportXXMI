@@ -947,7 +947,7 @@ def normal_export_translation(layout, semantic, flip):
     else:
         return lambda x: x
 
-def import_normals_step1(mesh, data, vertex_layers, operator, translate_normal):
+def import_normals_step1(mesh, data, vertex_layers, operator, translate_normal, flip_mesh):
     # Ensure normals are 3-dimensional:
     # XXX: Assertion triggers in DOA6
     if len(data[0]) == 4:
@@ -955,7 +955,7 @@ def import_normals_step1(mesh, data, vertex_layers, operator, translate_normal):
             #raise Fatal('Normals are 4D')
             operator.report({'WARNING'}, 'Normals are 4D, storing W coordinate in NORMAL.w vertex layer. Beware that some types of edits on this mesh may be problematic.')
             vertex_layers['NORMAL.w'] = [[x[3]] for x in data]
-    normals = [tuple(map(translate_normal, (x[0], x[1], x[2]))) for x in data]
+    normals = [tuple(map(translate_normal, (-(2*flip_mesh-1)*x[0], x[1], x[2]))) for x in data]
 
     # To make sure the normals don't get lost by Blender's edit mode,
     # or mesh.update() we need to set custom normals in the loops, not
@@ -1175,7 +1175,7 @@ def import_faces_from_vb_trianglestrip(mesh, vb, flip_winding):
     mesh.polygons.foreach_set('loop_start', [x*3 for x in range(num_faces)])
     mesh.polygons.foreach_set('loop_total', [3] * num_faces)
 
-def import_vertices(mesh, obj, vb, operator, semantic_translations={}, flip_normal=False):
+def import_vertices(mesh, obj, vb, operator, semantic_translations={}, flip_normal=False, flip_mesh=False):
     mesh.vertices.add(len(vb.vertices))
 
     blend_indices = {}
@@ -1220,7 +1220,7 @@ def import_vertices(mesh, obj, vb, operator, semantic_translations={}, flip_norm
                     # store it in a vertex layer and warn the modder.
                     operator.report({'WARNING'}, 'Positions are 4D, storing W coordinate in POSITION.w vertex layer. Beware that some types of edits on this mesh may be problematic.')
                     vertex_layers['POSITION.w'] = [[x[3]] for x in data]
-            positions = [(x[0], x[1], x[2]) for x in data]
+            positions = [(-(2*flip_mesh-1)*x[0], x[1], x[2]) for x in data]
             mesh.vertices.foreach_set('co', unpack_list(positions))
         elif translated_elem_name.startswith('COLOR'):
             if len(data[0]) <= 3 or vertex_color_layer_channels == 4:
@@ -1242,7 +1242,7 @@ def import_vertices(mesh, obj, vb, operator, semantic_translations={}, flip_norm
         elif translated_elem_name == 'NORMAL':
             use_normals = True
             translate_normal = normal_import_translation(elem, flip_normal)
-            normals = import_normals_step1(mesh, data, vertex_layers, operator, translate_normal)
+            normals = import_normals_step1(mesh, data, vertex_layers, operator, translate_normal, flip_mesh)     
         elif translated_elem_name in ('TANGENT', 'BINORMAL'):
         #    # XXX: loops.tangent is read only. Not positive how to handle
         #    # this, or if we should just calculate it when re-exporting.
@@ -1287,7 +1287,7 @@ def assert_pointlist_ib_is_pointless(ib, vb):
     assert(len(vb) == len(ib)) # FIXME: Properly implement point list index buffers
     assert(all([(i,) == j for i,j in enumerate(ib.faces)])) # FIXME: Properly implement point list index buffers
 
-def import_3dmigoto_vb_ib(operator, context, paths, flip_texcoord_v=True, flip_winding=False, flip_normal=False, axis_forward='-Z', axis_up='Y', pose_cb_off=[0,0], pose_cb_step=1, merge_verts=False, tris_to_quads=False, clean_loose=False):
+def import_3dmigoto_vb_ib(operator, context, paths, flip_texcoord_v=True, flip_winding=False, flip_mesh=False, flip_normal=False, axis_forward='-Z', axis_up='Y', pose_cb_off=[0,0], pose_cb_step=1, merge_verts=False, tris_to_quads=False, clean_loose=False):
     vb, ib, name, pose_path = load_3dmigoto_mesh(operator, paths)
 
     mesh = bpy.data.meshes.new(name)
@@ -1313,6 +1313,9 @@ def import_3dmigoto_vb_ib(operator, context, paths, flip_texcoord_v=True, flip_w
     # a previously exported file can also set them by default?
     obj['3DMigoto:FlipWinding'] = flip_winding
     obj['3DMigoto:FlipNormal'] = flip_normal
+    obj['3DMigoto:FlipMesh'] = flip_mesh
+    if flip_mesh:
+        flip_winding = not flip_winding
 
     if ib is not None:
         if ib.topology in ('trianglelist', 'trianglestrip'):
@@ -1333,7 +1336,7 @@ def import_3dmigoto_vb_ib(operator, context, paths, flip_texcoord_v=True, flip_w
     if vb.topology == 'pointlist':
         operator.report({'WARNING'}, '{}: uses point list topology, which is highly experimental and may have issues with normals/tangents/lighting. This may not be the mesh you are looking for.'.format(mesh.name))
 
-    (blend_indices, blend_weights, texcoords, vertex_layers, use_normals, normals) = import_vertices(mesh, obj, vb, operator, semantic_translations, flip_normal)
+    (blend_indices, blend_weights, texcoords, vertex_layers, use_normals, normals) = import_vertices(mesh, obj, vb, operator, semantic_translations, flip_normal, flip_mesh)
 
     import_uv_layers(mesh, obj, texcoords, flip_texcoord_v)
     if not texcoords:
@@ -2013,4 +2016,3 @@ def update_vgmap(operator, context, vg_step=1):
                 vgmap[vg] = highest
                 operator.report({'INFO'}, 'Assigned named vertex group %s = %i' % (vg, vgmap[vg]))
             obj[suffix] = vgmap
-

@@ -68,6 +68,30 @@ class QuickImportXXMIFrameAnalysis(bpy.types.Operator, ImportHelper, IOOBJOrient
             type=bpy.types.OperatorFileListElement,
             ) #type: ignore
 
+    flip_texcoord_v: BoolProperty(
+            name="Flip TEXCOORD V",
+            description="Flip TEXCOORD V asix during importing",
+            default=True,
+            ) #type: ignore
+
+    flip_winding: BoolProperty(
+            name="Flip Winding Order",
+            description="Flip winding order (face orientation) during importing. Try if the model doesn't seem to be shading as expected in Blender and enabling the 'Face Orientation' overlay shows **RED** (if it shows BLUE, try 'Flip Normal' instead). Not quite the same as flipping normals within Blender as this only reverses the winding order without flipping the normals. Recommended for Unreal Engine",
+            default=False,
+            ) #type: ignore
+    
+    flip_mesh: BoolProperty(
+            name="Flip Mesh",
+            description="Mirrors mesh over the X Axis on import, and invert the winding order.",
+            default=False,
+            ) #type: ignore
+
+    flip_normal: BoolProperty(
+            name="Flip Normal",
+            description="Flip Normals during importing. Try if the model doesn't seem to be shading as expected in Blender and enabling 'Face Orientation' overlay shows **BLUE** (if it shows RED, try 'Flip Winding Order' instead). Not quite the same as flipping normals within Blender as this won't reverse the winding order",
+            default=False,
+            ) #type: ignore
+
     load_related: BoolProperty(
             name="Auto-load related meshes",
             description="Automatically load related meshes found in the frame analysis dump",

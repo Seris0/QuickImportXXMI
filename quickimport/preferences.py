@@ -23,7 +23,8 @@ def save_preferences(context):
         "import_materialmap": prefs.import_materialmap,
         "import_stockingmap": prefs.import_stockingmap,
         "import_face": prefs.import_face,
-        "import_armature": prefs.import_armature
+        "import_armature": prefs.import_armature,
+        "flip_mesh": prefs.flip_mesh
     }
     
     with open(get_preferences_path(), 'w') as f:
@@ -57,4 +58,5 @@ def apply_preferences(preferences, context):
             prefs.import_stockingmap = preferences.get("import_stockingmap", False)
             prefs.import_face = preferences.get("import_face", False)
             prefs.import_armature = preferences.get("import_armature", False)
+            prefs.flip_mesh = preferences.get("flip_mesh", False)
 

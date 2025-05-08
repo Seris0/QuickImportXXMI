@@ -53,6 +53,15 @@ class QuickImportBase:
 
                 if combined_name:
                     matching_material = self.find_matching_material(combined_name, letter)
+                    
+                    # If still no material found and it's a Dress, try finding any Body material
+                    if not matching_material and "Dress" in combined_name:
+                        prefix = combined_name.split("Dress")[0]
+                        for material in bpy.data.materials:
+                            if material.name.startswith("mat_") and f"{prefix}Body" in material.name:
+                                matching_material = material
+                                print(f"Using generic Body material for Dress: {matching_material.name}")
+                                break
                 
                     if matching_material:
                         obj.data.materials.append(matching_material)
@@ -121,7 +130,7 @@ class QuickImportBase:
 
     def create_mesh_collection(self, context, folder):
         #Sins logic for collections with custom properties, 
-        # I will probably change this to don't use bmesh in future
+        # I will probably change this to don't use bmesh in futurec
         import bmesh #type: ignore
         collection_name = os.path.basename(folder)
         new_collection = bpy.data.collections.new(collection_name+"_CustomProperties")
@@ -204,73 +213,79 @@ class QuickImportBase:
             if area.type == 'VIEW_3D':
                 area.spaces.active.shading.type = 'MATERIAL'
         
-        # if bpy.app.version >= (4, 2, 0):
-        #     bpy.data.scenes["Scene"].view_settings.view_transform = 'Khronos PBR Neutral'
+        if bpy.app.version >= (4, 2, 0):
+            bpy.data.scenes["Scene"].view_settings.view_transform = 'Khronos PBR Neutral'
 
     def import_armature(self, context):
         try:
             # Step 1: Track the original selection
             previously_selected = set(bpy.context.selected_objects)
 
-            # Step 2: Filter out objects in "Face" collection or those with '-KeepEmpty' in their name
+            # Step 2: Filter out invalid body objects (Head and Faces should have armatures on it)
             body_objects = [
-                obj for obj in previously_selected 
-                if obj.type == 'MESH' and not any(col.name == 'Face' for col in obj.users_collection) and '-KeepEmpty' not in obj.name
+                obj for obj in previously_selected
+                if obj.type == 'MESH'
+                and not any(col.name == 'Face' for col in obj.users_collection)
+                and '-KeepEmpty' not in obj.name
+                and not any(head in obj.name for head in ['HeadA', 'HeadB'])
             ]
-            
-            # If no valid body objects, raise an error
+
             if not body_objects:
                 raise Exception("No valid body objects selected for armature import")
-            
-            # Step 3: Select the first body object to use as reference for armature import
-            obj = body_objects[0]  
+
+            # Step 3: Select the first body object as reference for armature import
+            obj = body_objects[0]
             bpy.ops.object.select_all(action='DESELECT')
             obj.select_set(True)
             context.view_layer.objects.active = obj
-            
+
             # Step 4: Import the armature file
             original_selection = set(bpy.context.selected_objects)
             bpy.ops.import_scene.armature_file()
             newly_imported = set(bpy.context.selected_objects) - original_selection
-            
-            # Step 5: Identify the armature among the imported objects
-            armature = next((obj for obj in newly_imported if obj.type == 'ARMATURE'), None)
-            if not armature:
-                raise Exception("No armature found in imported objects")
-            
-            # Step 6: Add the armature modifier only to valid meshes
-            for obj in previously_selected:
-                # Apply armature modifier only if not in Face collection and not '-KeepEmpty'
-                if obj.type == 'MESH' and not any(col.name == 'Face' for col in obj.users_collection) and '-KeepEmpty' not in obj.name:
-                    # Get base name without file extension and hash
-                    obj_base_name = obj.name.split('-')[0].split('=')[0]
-                    
-                    # Find matching armature by name similarity
-                    matching_armature = None
-                    for imported_obj in newly_imported:
-                        if imported_obj.type == 'ARMATURE':
-                            # Convert armature name to match mesh naming pattern
-                            armature_base = imported_obj.name.replace('_', '')
-                            # Remove any of the special keywords from mesh name
-                            mesh_base = obj_base_name
-                            for keyword in ['Body', 'Head', 'Extra', 'Dress']:
-                                mesh_base = mesh_base.replace(keyword, '')
-                            
-                            if armature_base.lower().startswith(mesh_base.lower()):
-                                matching_armature = imported_obj
-                                break
-                    
-                    if matching_armature:
-                        mod = obj.modifiers.new(name="Armature", type='ARMATURE')
-                        mod.object = matching_armature
 
-            # Step 7: Restore the selection to include newly imported objects and previously selected objects
+            # Step 5: Identify all imported armatures
+            imported_armatures = [obj for obj in newly_imported if obj.type == 'ARMATURE']
+            if not imported_armatures:
+                raise Exception("No armatures found in imported objects")
+
+            # Step 6: Match each mesh to the most appropriate armature
+            for obj in body_objects:
+                # Extract base name for matching
+                obj_base_name = obj.name.split('-')[0].split('=')[0].lower()
+
+                # Find the best matching armature dynamically
+                best_match = None
+                best_score = 0
+                for armature in imported_armatures:
+                    # Set armature scale based on flip_mesh setting
+                    if context.scene.quick_import_settings.flip_mesh:
+                        armature.scale = (1, 1, 1)
+                    else:
+                        armature.scale = (-1, 1, 1)
+                        
+                    armature_base = armature.name.replace('_', '').lower()
+                    score = sum(1 for char in obj_base_name if char in armature_base)
+                    if score > best_score:
+                        best_match = armature
+                        best_score = score
+
+                if best_match:
+                    # Check if armature modifier already exists
+                    existing_mod = next((mod for mod in obj.modifiers if mod.type == 'ARMATURE'), None)
+                    if existing_mod:
+                        existing_mod.object = best_match
+                    else:
+                        mod = obj.modifiers.new(name="Armature", type='ARMATURE')
+                        mod.object = best_match
+
+            # Step 7: Restore selection to include newly imported objects and previously selected objects
             for obj in newly_imported:
                 obj.select_set(True)
             for obj in previously_selected:
-                if obj not in newly_imported:  
+                if obj not in newly_imported:
                     obj.select_set(True)
-                    
+
         except Exception as e:
             self.report({'ERROR'}, f"Armature import failed: {str(e)}")
             for obj in previously_selected:
@@ -342,11 +357,20 @@ CHARACTER_NAME_MAPPING = {
     "Sara": "KujouSara",
     "Kuki": "Shinobu",
     "KukiShinobu": "Shinobu",
+    "HutaoSkin": "HutaoCherry",
+    "HutaoCherries": "HutaoCherry",
+    "HutaoSnow": "HutaoCherry",
+    "HutaoLaden": "HutaoCherry",
+    "HutaoCherriesSnowLaden": "HutaoCherry",
+    "HutaoCherriesSnow": "HutaoCherry",
+
+
     
     # "FurinaPonytail": "Furina"
 }
 
-COMMON_PARTS = ['PonyTail', 'Body', 'Head', 'Arm', 'Leg', 'Dress', 'Extra', 'Extras', 'Hair', 'Mask', 'Idle', 'Eyes', 'Coat', 'JacketHead', 'JacketBody', 'Jacket']
+COMMON_PARTS = ['PonyTail', 'Body', 'Head', 'Arm', 'Leg', 'Dress', 'Extra', 'Extras', 'Hair', 'Mask', 'Idle', 'Eyes', 'Coat', 'JacketHead', 'JacketBody', 'Jacket',
+'Hat', 'HatHead', 'HatBody']
 
 
 class QuickImportArmature(bpy.types.Operator):
@@ -368,65 +392,123 @@ class QuickImportArmature(bpy.types.Operator):
     def post_import_processing(self, context):
         script_dir = os.path.dirname(os.path.realpath(__file__))
         print(f"Script directory: {script_dir}")
-        armatures_dir = os.path.join(script_dir, "resources", "armatures")
-        print(f"Armatures directory: {armatures_dir}")
+        base_armatures_dir = os.path.join(script_dir, "resources", "armatures")
+        print(f"Base armatures directory: {base_armatures_dir}")
         
-        if not os.path.exists(armatures_dir):
-            raise FileNotFoundError(f"Armatures directory not found at: {armatures_dir}")
+        if not os.path.exists(base_armatures_dir):
+            raise FileNotFoundError(f"Armatures directory not found at: {base_armatures_dir}")
+        
+        # Define game-specific armature directories
+        gi_armatures_dir = os.path.join(base_armatures_dir, "GI")
+        hsr_armatures_dir = os.path.join(base_armatures_dir, "HSR")
         
         selected_objects = context.selected_objects
         if not selected_objects:
             raise Exception("No object selected")
-        
-        obj_name = selected_objects[0].name.split('-')[0].split('=')[0]
-        if not obj_name:
-            raise Exception("Invalid object name")
-        
-        # Sort COMMON_PARTS by length in descending order to match longest parts first
-        sorted_parts = sorted(COMMON_PARTS, key=len, reverse=True)
-        
-        # First try to find any common parts in the name
-        base_name = obj_name
-        for part in sorted_parts:
-            if part.lower() in obj_name.lower():
-                # Get everything before the part
-                base_name = re.split(part, obj_name, flags=re.IGNORECASE)[0]
-                break
-        
-        # Handle special character name cases
-        base_name = CHARACTER_NAME_MAPPING.get(base_name, base_name)
-        
+
+        # Group objects by their base name before any common parts
+        object_groups = {}
+        for obj in selected_objects:
+            obj_name = obj.name.split('-')[0].split('=')[0]
+            if not obj_name:
+                continue
+
+            # Sort COMMON_PARTS by length in descending order to match longest parts first
+            sorted_parts = sorted(COMMON_PARTS, key=len, reverse=True)
+            
+            # Try to find any common parts in the name
+            base_name = obj_name
+            found_part = False
+            for part in sorted_parts:
+                if part.lower() in obj_name.lower():
+                    # Get everything before the part
+                    base_name = re.split(part, obj_name, flags=re.IGNORECASE)[0]
+                    found_part = True
+                    break
+            
+            # Only add objects that have a recognized part to the main group
+            if found_part:
+                base_name = CHARACTER_NAME_MAPPING.get(base_name, base_name)
+                if base_name not in object_groups:
+                    object_groups[base_name] = []
+                object_groups[base_name].append(obj)
+            else:
+                print(f"Skipping object with unrecognized parts: {obj.name}")
+
         # Don't try to import armature for Face collection
-        if base_name == "Face":
+        if "Face" in object_groups:
             return {'FINISHED'}
-        
-        if not base_name:
-            raise Exception("Could not determine base name")
-        
-        # Find files that match the base name up until "Armature" and end with .blend
-        matching_files = [
-            f for f in os.listdir(armatures_dir)
-            if f.endswith('.blend') 
-            and (armature_idx := f.lower().find('armature')) != -1
-            and f[:armature_idx].lower() == base_name.lower()
-        ]
-        
-        if not matching_files:
-            raise FileNotFoundError(f"No matching armature file found for {base_name} in {armatures_dir}")
-            
-        armature_path = os.path.join(armatures_dir, matching_files[0])
-            
-        with bpy.data.libraries.load(armature_path) as (data_from, data_to):
-            armature_objects = [name for name in data_from.objects if 'Armature' in name]
-            if not armature_objects:
-                raise FileNotFoundError(f"No armature found in file: {armature_path}")
-            data_to.objects = armature_objects
-      
-        for obj in data_to.objects:
-            if obj is not None:
-                context.scene.collection.objects.link(obj)
-                obj.select_set(True)
+
+        # Process each group separately
+        for base_name, objects in object_groups.items():
+            if not base_name:
+                continue
+
+            # Search in both GI and HSR directories
+            armature_found = False
+            for armatures_dir in [gi_armatures_dir, hsr_armatures_dir]:
+                if not os.path.exists(armatures_dir):
+                    continue
+                    
+                # Find files that match the base name up until "Armature" and end with .blend
+                matching_files = [
+                    f for f in os.listdir(armatures_dir)
+                    if f.endswith('.blend') 
+                    and (armature_idx := f.lower().find('armature')) != -1
+                    and f[:armature_idx].lower() == base_name.lower()
+                ]
                 
+                if matching_files:
+                    armature_path = os.path.join(armatures_dir, matching_files[0])
+                    
+                    with bpy.data.libraries.load(armature_path) as (data_from, data_to):
+                        armature_objects = [name for name in data_from.objects if 'Armature' in name]
+                        if not armature_objects:
+                            print(f"Warning: No armature found in file: {armature_path}")
+                            continue
+                        data_to.objects = armature_objects
+              
+                    for obj in data_to.objects:
+                        if obj is not None:
+                            context.scene.collection.objects.link(obj)
+                            obj.select_set(True)
+                            armature_found = True
+                    break  # Stop searching if armature was found
+                    
+            if not armature_found:
+                print(f"Warning: No matching armature file found for {base_name} in either GI or HSR directories")
+
+
+class QuickImportRaw(QuickImport3DMigotoRaw, QuickImportBase):
+    """Setup Character file with raw data .IB + .VB"""
+    bl_idname = "import_scene.3dmigoto_raw"
+    bl_label = "Quick Import Raw for XXMI"
+    bl_options = {"UNDO"}
+
+    def execute(self, context):
+        result = super().execute(context)
+        if result != {"FINISHED"}:
+            return result
+        
+        folder = os.path.dirname(self.properties.filepath)
+        print("------------------------")
+
+        print(f"Found Folder: {folder}")
+        files = os.listdir(folder)
+        files = [f for f in files if f.endswith("Diffuse.dds")]
+        print(f"List of files: {files}")
+
+        if bpy.app.version < (4, 2, 0):
+            importedmeshes = TextureHandler.create_material(context, files, folder)
+        else:
+            importedmeshes = TextureHandler42.create_material(context, files, folder)
+
+        print(f"Imported meshes: {[obj.name for obj in importedmeshes]}")
+
+        self.post_import_processing(context, folder)
+
+        return {"FINISHED"}
+                   
 class QuickImportFace(bpy.types.Operator):
     bl_idname = "import_scene.face_file"
     bl_label = "Import Face"
@@ -514,6 +596,7 @@ class QuickImport(QuickImportXXMIFrameAnalysis, QuickImportBase):
 
     def execute(self, context):
         cfg = context.scene.quick_import_settings
+        self.flip_mesh = cfg.flip_mesh
         super().execute(context)
 
         folder = os.path.dirname(self.properties.filepath)
@@ -542,36 +625,6 @@ class QuickImport(QuickImportXXMIFrameAnalysis, QuickImportBase):
             importedmeshes = TextureHandler.create_material(context, texture_files, folder)
         else:
             importedmeshes = TextureHandler42.create_material(context, texture_files, folder)
-
-        print(f"Imported meshes: {[obj.name for obj in importedmeshes]}")
-
-        self.post_import_processing(context, folder)
-
-        return {"FINISHED"}
-
-class QuickImportRaw(QuickImport3DMigotoRaw, QuickImportBase):
-    """Setup Character file with raw data .IB + .VB"""
-    bl_idname = "import_scene.3dmigoto_raw"
-    bl_label = "Quick Import Raw for XXMI"
-    bl_options = {"UNDO"}
-
-    def execute(self, context):
-        result = super().execute(context)
-        if result != {"FINISHED"}:
-            return result
-        
-        folder = os.path.dirname(self.properties.filepath)
-        print("------------------------")
-
-        print(f"Found Folder: {folder}")
-        files = os.listdir(folder)
-        files = [f for f in files if f.endswith("Diffuse.dds")]
-        print(f"List of files: {files}")
-
-        if bpy.app.version < (4, 2, 0):
-            importedmeshes = TextureHandler.create_material(context, files, folder)
-        else:
-            importedmeshes = TextureHandler42.create_material(context, files, folder)
 
         print(f"Imported meshes: {[obj.name for obj in importedmeshes]}")
 
