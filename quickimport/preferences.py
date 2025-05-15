@@ -16,6 +16,7 @@ def save_preferences(context):
         "import_textures": prefs.import_textures,
         "create_collection": prefs.create_collection,
         "create_mesh_collection": prefs.create_mesh_collection,
+        "hide_advanced": prefs.hide_advanced,
         "hide_textures": prefs.hide_textures,
         "import_diffuse": prefs.import_diffuse,
         "import_lightmap": prefs.import_lightmap,
@@ -51,6 +52,7 @@ def apply_preferences(preferences, context):
             prefs.create_collection = preferences.get("create_collection", True)
             prefs.create_mesh_collection = preferences.get("create_mesh_collection", True)
             prefs.hide_textures = preferences.get("hide_textures", False)
+            prefs.hide_advanced = preferences.get("hide_advanced", False)
             prefs.import_diffuse = preferences.get("import_diffuse", True)
             prefs.import_lightmap = preferences.get("import_lightmap", False)
             prefs.import_normalmap = preferences.get("import_normalmap", False)

@@ -2,7 +2,10 @@
 import bpy #type: ignore
 import os
 if bpy.app.version < (4, 2, 0):
-    from blender_dds_addon import import_dds #type: ignore
+    try:
+        from blender_dds_addon import import_dds #type: ignore
+    except ImportError:
+        raise ImportError("The Blender DDS Addon is required for Blender 3.6. Please install it from: https://github.com/matyalatte/Blender-DDS-Addon")
 
 
 class TextureHandler:
@@ -89,10 +92,13 @@ class TextureHandler:
 
             # Set up BSDF properties
             bsdf.inputs[0].default_value = (1, 1, 1, 1)
-            if bpy.app.version < (4, 0):
-                bsdf.inputs[5].default_value = 0.0
-            else:
-                bsdf.inputs[5].default_value = (0.5, 0.5, 0.5)
+            bsdf.inputs[5].default_value = 0.0
+            #Well Sins like Roughness 1.0, so why not teriderp
+            bsdf.inputs[9].default_value = 1.0
+            # Position nodes
+            texImage.location = (-300, 0)
+            bsdf.location = (0, 0) 
+            material_output.location = (300, 0)
 
             # Link nodes
             material.node_tree.links.new(texImage.outputs[0], bsdf.inputs[0])
@@ -171,7 +177,15 @@ class TextureHandler42:
             material_output = material.node_tree.nodes.new("ShaderNodeOutputMaterial")
             bsdf.inputs[0].default_value = (1, 1, 1, 1)
             bsdf.inputs[5].default_value = (0.5, 0.5, 0.5)
+
+            bsdf.inputs[2].default_value = (1.0)
+            bsdf.inputs[3].default_value = (1.0)
             
+                        # Position nodes
+            texImage.location = (-300, 0)
+            bsdf.location = (0, 0) 
+            material_output.location = (300, 0)
+
             # Link nodes
             material.node_tree.links.new(texImage.outputs[0], bsdf.inputs[0])
             material.node_tree.links.new(bsdf.outputs[0], material_output.inputs[0])
