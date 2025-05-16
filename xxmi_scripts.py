@@ -121,6 +121,11 @@ class QuickImportSettings(bpy.types.PropertyGroup):
         default=False,
         description="Enable Merge by Distance"
     )#type: ignore 
+    flip_mesh: BoolProperty(
+        name="Flip Mesh",
+        default=True,
+        description="Flips mesh over x-axis on import"
+    ) #type: ignore 
     reset_rotation: BoolProperty(
         name="Reset Rotation (ZZZ)",
         default=False,
@@ -158,9 +163,9 @@ class QuickImportSettings(bpy.types.PropertyGroup):
         update=update_create_collection
     ) #type: ignore
     create_mesh_collection: BoolProperty(
-        name="Create Mesh Collection",
+        name="Per Component Collection",
         default=False,
-        description="Create a new collection for mesh data and custom properties",
+        description="Create a new collection for mesh data and custom properties (Drawindexed Export)",
         update=update_create_mesh_collection
     ) #type: ignore
     import_diffuse: BoolProperty(
@@ -247,8 +252,13 @@ class XXMI_TOOLS_PT_quick_import_panel(bpy.types.Panel):
                  icon='HIDE_OFF' if cfg.hide_advanced else 'HIDE_ON', toggle=True)
         
         if cfg.hide_advanced:
-            col.prop(cfg, "import_face", toggle=True)
-            col.prop(cfg, "import_armature", toggle=True)
+            col.separator()
+            row = col.row()
+            row.prop(cfg, "flip_mesh", toggle=True)
+            col.separator()
+            row = col.row()
+            row.prop(cfg, "import_armature", toggle=True)
+            row.prop(cfg, "import_face", toggle=True)
 
         if cfg.import_textures:
             col.separator()
