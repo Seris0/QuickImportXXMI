@@ -58,7 +58,7 @@ class QuickImportBase:
                     if not matching_material and "Dress" in combined_name:
                         prefix = combined_name.split("Dress")[0]
                         for material in bpy.data.materials:
-                            if material.name.startswith("mat_") and f"{prefix}Body" in material.name:
+                            if material.name.startswith("mat_") and f"{prefix}Body".lower() in material.name.lower():
                                 matching_material = material
                                 print(f"Using generic Body material for Dress: {matching_material.name}")
                                 break
@@ -74,19 +74,22 @@ class QuickImportBase:
     def extract_combined_name(self, name):
         keywords = ['Body', 'Head', 'Arm', 'Leg', 'Dress', 'Extra', 'Extras', 'Hair', 'Mask', 'Idle']
         for keyword in keywords:
-            if keyword in name:
-                parts = name.split(keyword)
+            if keyword.lower() in name.lower():
+                # Find the actual keyword in the original case
+                keyword_index = name.lower().find(keyword.lower())
+                actual_keyword = name[keyword_index:keyword_index + len(keyword)]
+                parts = name.split(actual_keyword)
                 prefix = parts[0]
                 letter = parts[1][0] if len(parts) > 1 and parts[1] else ''
-                combined_name = prefix + keyword
-                print(f"Combined name '{combined_name}' created from '{prefix}' and '{keyword}' for {name}, letter: '{letter}'")
+                combined_name = prefix + actual_keyword
+                print(f"Combined name '{combined_name}' created from '{prefix}' and '{actual_keyword}' for {name}, letter: '{letter}'")
                 return combined_name, letter
         print(f"No keywords matched in {name}")
         return "", ""
 
     def find_matching_material(self, combined_name, letter):
         # F4ck you Asta 
-        if combined_name == "AstaBody":
+        if combined_name.lower() == "astabody":
             asta_material_mapping = {
                 'C': 'BodyB',
                 'D': 'BodyA',
@@ -95,7 +98,7 @@ class QuickImportBase:
             target_material_suffix = asta_material_mapping.get(letter)
             if target_material_suffix:
                 for material in bpy.data.materials:
-                    if material.name.startswith("mat_") and target_material_suffix in material.name:
+                    if material.name.startswith("mat_") and target_material_suffix.lower() in material.name.lower():
                         print(f"Found material {material.name} for Asta rule with letter '{letter}'")
                         return material
                 print(f"No Asta rule material found for letter '{letter}'")
@@ -111,7 +114,7 @@ class QuickImportBase:
             current_letter = letters[i] if i >= 0 else ''
             for material in bpy.data.materials:
                 print(f"Checking material {material.name} for match with combined name '{combined_name}{current_letter}'")
-                if material.name.startswith("mat_") and f"{combined_name}{current_letter}" in material.name:
+                if material.name.startswith("mat_") and f"{combined_name}{current_letter}".lower() in material.name.lower():
                     return material
 
         return None
