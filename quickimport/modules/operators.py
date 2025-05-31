@@ -229,10 +229,12 @@ class QuickImportXXMIFrameAnalysis(bpy.types.Operator, ImportHelper, IOOBJOrient
             paths = self.get_vb_ib_paths()
 
             import_3dmigoto(self, context, paths, **keywords)
-            xxmi = context.scene.xxmi
-            if not xxmi.dump_path:
-                if os.path.exists(os.path.join(os.path.dirname(self.filepath), 'hash.json')):
-                    xxmi.dump_path = os.path.dirname(self.filepath)
+            # Check if 'xxmi' attribute exists in the scene before accessing it
+            xxmi = getattr(context.scene, "xxmi", None)
+            if xxmi is not None:
+                if not getattr(xxmi, "dump_path", None):
+                    if os.path.exists(os.path.join(os.path.dirname(self.filepath), 'hash.json')):
+                        xxmi.dump_path = os.path.dirname(self.filepath)
         except Fatal as e:
             self.report({'ERROR'}, str(e))
         return {'FINISHED'}
