@@ -1,364 +1,243 @@
-from glob import glob
-import re
-import itertools
-import os
-import time
-import bpy #type: ignore
-from bpy_extras.io_utils import  ImportHelper, ExportHelper, orientation_helper #type: ignore
-from bpy.props import BoolProperty, StringProperty, CollectionProperty, IntProperty #type: ignore
-from .datahandling import load_3dmigoto_mesh, open_frame_analysis_log_file, find_stream_output_vertex_buffers, VBSOMapEntry, ImportPaths, Fatal, import_3dmigoto, import_3dmigoto_raw_buffers
+import bpy
+from bpy.props import BoolProperty, IntProperty, StringProperty
+from bpy.types import Operator, AddonPreferences
+from bpy_extras.io_utils import ImportHelper, orientation_helper
 
-IOOBJOrientationHelper = type('DummyIOOBJOrientationHelper', (object,), {})
+from .. import __name__ as package_name
+from .. import addon_updater_ops
+from .datahandling import (
+    Fatal,
+    apply_vgmap,
+    import_pose,
+    merge_armatures,
+    update_vgmap,
+)
 
-class ClearSemanticRemapList(bpy.types.Operator):
-    """Clear the semantic remap list"""
-    bl_idname = "import_mesh.migoto_semantic_remap_clear"
-    bl_label = "Clear list"
+from .datastructures import IOOBJOrientationHelper
 
-    def execute(self, context):
-        import_operator = context.space_data.active_operator
-        import_operator.properties.semantic_remap.clear()
-        return {'FINISHED'}
 
-class PrefillSemanticRemapList(bpy.types.Operator):
-    """Add semantics from the selected files to the semantic remap list"""
-    bl_idname = "import_mesh.migoto_semantic_remap_prefill"
-    bl_label = "Prefill from selected files"
+class ApplyVGMap(Operator, ImportHelper):
+    """Apply vertex group map to the selected object"""
 
-    def execute(self, context):
-        import_operator = context.space_data.active_operator
-        semantic_remap_list = import_operator.properties.semantic_remap
-        semantics_in_list = { x.semantic_from for x in semantic_remap_list }
+    bl_idname = "mesh.migoto_vertex_group_map"
+    bl_label = "Apply 3DMigoto vgmap"
+    bl_options = {"UNDO"}
 
-        paths = import_operator.get_vb_ib_paths(load_related=False)
-
-        for p in paths:
-            vb, ib, name, pose_path = load_3dmigoto_mesh(import_operator, [p])
-            valid_semantics = vb.get_valid_semantics()
-            for semantic in vb.layout:
-                if semantic.name not in semantics_in_list:
-                    remap = semantic_remap_list.add()
-                    remap.semantic_from = semantic.name
-                    # Store some extra information that can be helpful to guess the likely semantic:
-                    remap.Format = semantic.Format
-                    remap.InputSlot = semantic.InputSlot
-                    remap.InputSlotClass = semantic.InputSlotClass
-                    remap.AlignedByteOffset = semantic.AlignedByteOffset
-                    remap.valid = semantic.name in valid_semantics
-                    remap.update_tooltip()
-                    semantics_in_list.add(semantic.name)
-
-        return {'FINISHED'}
-
-@orientation_helper(axis_forward='-Z', axis_up='Y')
-class QuickImportXXMIFrameAnalysis(bpy.types.Operator, ImportHelper, IOOBJOrientationHelper):
-    """Import a mesh dumped with 3DMigoto's frame analysis"""
-    bl_idname = "import_mesh.quickimportxxmi_frame_analysis"
-    bl_label = "Import 3DMigoto Frame Analysis Dump"
-    bl_options = {'PRESET', 'UNDO'}
-
-    filename_ext = '.txt'
+    filename_ext = ".vgmap"
     filter_glob: StringProperty(
-            default='*.txt',
-            options={'HIDDEN'},
-            ) #type: ignore
+        default="*.vgmap",
+        options={"HIDDEN"},
+    )
 
-    files: CollectionProperty(
-            name="File Path",
-            type=bpy.types.OperatorFileListElement,
-            ) #type: ignore
+    # commit: BoolProperty(
+    #        name="Commit to current mesh",
+    #        description="Directly alters the vertex groups of the current mesh, rather than performing the mapping at export time",
+    #        default=False,
+    #        )
 
-    flip_texcoord_v: BoolProperty(
-            name="Flip TEXCOORD V",
-            description="Flip TEXCOORD V asix during importing",
-            default=True,
-            ) #type: ignore
+    rename: BoolProperty(
+        name="Rename existing vertex groups",
+        description="Rename existing vertex groups to match the vgmap file",
+        default=True,
+    )
 
-    flip_winding: BoolProperty(
-            name="Flip Winding Order",
-            description="Flip winding order (face orientation) during importing. Try if the model doesn't seem to be shading as expected in Blender and enabling the 'Face Orientation' overlay shows **RED** (if it shows BLUE, try 'Flip Normal' instead). Not quite the same as flipping normals within Blender as this only reverses the winding order without flipping the normals. Recommended for Unreal Engine",
-            default=False,
-            ) #type: ignore
-    
-    flip_mesh: BoolProperty(
-            name="Flip Mesh",
-            description="Mirrors mesh over the X Axis on import, and invert the winding order.",
-            default=False,
-            ) #type: ignore
+    cleanup: BoolProperty(
+        name="Remove non-listed vertex groups",
+        description="Remove any existing vertex groups that are not listed in the vgmap file",
+        default=False,
+    )
 
-    flip_normal: BoolProperty(
-            name="Flip Normal",
-            description="Flip Normals during importing. Try if the model doesn't seem to be shading as expected in Blender and enabling 'Face Orientation' overlay shows **BLUE** (if it shows RED, try 'Flip Winding Order' instead). Not quite the same as flipping normals within Blender as this won't reverse the winding order",
-            default=False,
-            ) #type: ignore
+    reverse: BoolProperty(
+        name="Swap from & to",
+        description="Switch the order of the vertex group map - if this mesh is the 'to' and you want to use the bones in the 'from'",
+        default=False,
+    )
 
-    load_related: BoolProperty(
-            name="Auto-load related meshes",
-            description="Automatically load related meshes found in the frame analysis dump",
-            default=True,
-            ) #type: ignore
+    suffix: StringProperty(
+        name="Suffix",
+        description="Suffix to add to the vertex buffer filename when exporting, for bulk exports of a single mesh with multiple distinct vertex group maps",
+        default="",
+    )
 
-    load_related_so_vb: BoolProperty(
-            name="Load pre-SO buffers (EXPERIMENTAL)",
-            description="Scans the frame analysis log file to find GPU pre-skinning Stream Output techniques in prior draw calls, and loads the unposed vertex buffers from those calls that are suitable for editing. Recommended for Unity games to load neutral poses",
-            default=False,
-            ) #type: ignore
+    def invoke(self, context, event):
+        self.suffix = ""
+        return ImportHelper.invoke(self, context, event)
 
-    merge_meshes: BoolProperty(
-            name="Merge meshes together",
-            description="Merge all selected meshes together into one object. Meshes must be related",
-            default=False,
-            ) #type: ignore
+    def execute(self, context):
+        try:
+            keywords = self.as_keywords(ignore=("filter_glob",))
+            apply_vgmap(self, context, **keywords)
+        except Fatal as e:
+            self.report({"ERROR"}, str(e))
+        return {"FINISHED"}
 
-    pose_cb: StringProperty(
-            name="Bone CB",
-            description='Indicate a constant buffer slot (e.g. "vs-cb2") containing the bone matrices',
-            default="",
-            ) #type: ignore
+
+class UpdateVGMap(Operator):
+    """Assign new 3DMigoto vertex groups"""
+
+    bl_idname = "mesh.update_migoto_vertex_group_map"
+    bl_label = "Assign new 3DMigoto vertex groups"
+    bl_options = {"UNDO"}
+
+    vg_step: bpy.props.IntProperty(
+        name="Vertex group step",
+        description="If used vertex groups are 0,1,2,3,etc specify 1. If they are 0,3,6,9,12,etc specify 3",
+        default=1,
+        min=1,
+    )
+
+    def invoke(self, context, event):
+        wm = context.window_manager
+        return wm.invoke_props_dialog(self)
+
+    def execute(self, context):
+        try:
+            keywords = self.as_keywords()
+            update_vgmap(self, context, **keywords)
+        except Fatal as e:
+            self.report({"ERROR"}, str(e))
+        return {"FINISHED"}
+
+
+@orientation_helper(axis_forward="-Z", axis_up="Y")
+class Import3DMigotoPose(Operator, ImportHelper, IOOBJOrientationHelper):
+    """Import a pose from a 3DMigoto constant buffer dump"""
+
+    bl_idname = "armature.migoto_pose"
+    bl_label = "Import 3DMigoto Pose"
+    bl_options = {"UNDO"}
+
+    filename_ext = ".txt"
+    filter_glob: StringProperty(
+        default="*.txt",
+        options={"HIDDEN"},
+    )
+
+    limit_bones_to_vertex_groups: BoolProperty(
+        name="Limit Bones to Vertex Groups",
+        description="Limits the maximum number of bones imported to the number of vertex groups of the active object",
+        default=True,
+    )
 
     pose_cb_off: bpy.props.IntVectorProperty(
-            name="Bone CB range",
-            description='Indicate start and end offsets (in multiples of 4 component values) to find the matrices in the Bone CB',
-            default=[0,0],
-            size=2,
-            min=0,
-            ) #type: ignore
+        name="Bone CB range",
+        description="Indicate start and end offsets (in multiples of 4 component values) to find the matrices in the Bone CB",
+        default=[0, 0],
+        size=2,
+        min=0,
+    )
 
     pose_cb_step: bpy.props.IntProperty(
-            name="Vertex group step",
-            description='If used vertex groups are 0,1,2,3,etc specify 1. If they are 0,3,6,9,12,etc specify 3',
-            default=1,
-            min=1,
-            ) #type: ignore
-    
-
-    def get_vb_ib_paths(self, load_related=None):
-        buffer_pattern = re.compile(r'''-(?:ib|vb[0-9]+)(?P<hash>=[0-9a-f]+)?(?=[^0-9a-f=])''')
-        vb_regex = re.compile(r'''^(?P<draw_call>[0-9]+)-vb(?P<slot>[0-9]+)=''') # TODO: Combine with above? (careful not to break hold type frame analysis)
-
-        dirname = os.path.dirname(self.filepath)
-        ret = set()
-        if load_related is None:
-            load_related = self.load_related
-
-        vb_so_map = {}
-        if self.load_related_so_vb:
-            try:
-                fa_log = open_frame_analysis_log_file(dirname)
-            except FileNotFoundError:
-                self.report({'WARNING'}, 'Frame Analysis Log File not found, loading unposed meshes from GPU Stream Output pre-skinning passes will be unavailable')
-            else:
-                vb_so_map = find_stream_output_vertex_buffers(fa_log)
-
-        files = set()
-        if load_related:
-            for filename in self.files:
-                match = buffer_pattern.search(filename.name)
-                if match is None or not match.group('hash'):
-                    continue
-                paths = glob(os.path.join(dirname, '*%s*.txt' % filename.name[match.start():match.end()]))
-                files.update([os.path.basename(x) for x in paths])
-        if not files:
-            files = [x.name for x in self.files]
-            if files == ['']:
-                raise Fatal('No files selected')
-
-        done = set()
-        for filename in files:
-            if filename in done:
-                continue
-            match = buffer_pattern.search(filename)
-            if match is None:
-                if filename.lower().startswith('log') or filename.lower() == 'shaderusage.txt':
-                    # User probably just selected all files including the log
-                    continue
-                self.report({'ERROR'}, 'Unable to find corresponding buffers from "{}" - filename did not match vertex/index buffer pattern'.format(filename))
-                continue
-
-            if not match.group('hash'):
-                self.report({'INFO'}, 'Filename did not contain hash - if Frame Analysis dumped a custom resource the .txt file may be incomplete, Using .buf files instead')
-
-            ib_pattern = filename[:match.start()] + '-ib*' + filename[match.end():]
-            vb_pattern = filename[:match.start()] + '-vb*' + filename[match.end():]
-            ib_paths = glob(os.path.join(dirname, ib_pattern))
-            vb_paths = glob(os.path.join(dirname, vb_pattern))
-            done.update(map(os.path.basename, itertools.chain(vb_paths, ib_paths)))
-
-            if vb_so_map:
-                vb_so_paths = set()
-                for vb_path in vb_paths:
-                    vb_match = vb_regex.match(os.path.basename(vb_path))
-                    if vb_match:
-                        draw_call, slot = map(int, vb_match.group('draw_call', 'slot'))
-                        so = vb_so_map.get(VBSOMapEntry(draw_call, slot))
-                        if so:
-                            vb_so_pattern = f'{so.draw_call:06}-vb*.txt'
-                            glob_result = glob(os.path.join(dirname, vb_so_pattern))
-                            if not glob_result:
-                                self.report({'WARNING'}, f'{vb_so_pattern} not found, loading unposed meshes from GPU Stream Output pre-skinning passes will be unavailable')
-                            vb_so_paths.update(glob_result)
-                vb_paths.extend(sorted(vb_so_paths))
-
-            pose_path = None
-            if self.pose_cb:
-                pose_pattern = filename[:match.start()] + '*-' + self.pose_cb + '=*.txt'
-                try:
-                    pose_path = glob(os.path.join(dirname, pose_pattern))[0]
-                except IndexError:
-                    pass
-
-            if len(ib_paths) > 1:
-                raise Fatal('Error: excess index buffers in dump?')
-            elif len(ib_paths) == 0:
-                name = os.path.basename(vb_paths[0])
-                ib_paths = [None]
-                self.report({'WARNING'}, '{}: No index buffer present, support for this case is highly experimental'.format(name))
-            ret.add(ImportPaths(tuple(vb_paths), ib_paths[0], False, pose_path))
-        return ret
+        name="Vertex group step",
+        description="If used vertex groups are 0,1,2,3,etc specify 1. If they are 0,3,6,9,12,etc specify 3",
+        default=1,
+        min=1,
+    )
 
     def execute(self, context):
-        if self.merge_meshes or self.load_related:
-            self.report({'INFO'}, 'Loading .buf files selected: Disabled incompatible options')
-        self.merge_meshes = False
-        self.load_related = False
-
         try:
-            keywords = self.as_keywords(ignore=('filepath', 'files',
-                'filter_glob', 'load_related', 'load_related_so_vb',
-                'pose_cb', 'semantic_remap', 'semantic_remap_idx'))
-            paths = self.get_vb_ib_paths()
-
-            import_3dmigoto(self, context, paths, **keywords)
-            # Check if 'xxmi' attribute exists in the scene before accessing it
-            xxmi = getattr(context.scene, "xxmi", None)
-            if xxmi is not None:
-                if not getattr(xxmi, "dump_path", None):
-                    if os.path.exists(os.path.join(os.path.dirname(self.filepath), 'hash.json')):
-                        xxmi.dump_path = os.path.dirname(self.filepath)
+            keywords = self.as_keywords(ignore=("filter_glob",))
+            import_pose(self, context, **keywords)
         except Fatal as e:
-            self.report({'ERROR'}, str(e))
-        return {'FINISHED'}
+            self.report({"ERROR"}, str(e))
+        return {"FINISHED"}
+
+
+class Merge3DMigotoPose(Operator):
+    """Merge identically posed bones of related armatures into one"""
+
+    bl_idname = "armature.merge_pose"
+    bl_label = "Merge 3DMigoto Poses"
+    bl_options = {"UNDO"}
+
+    def execute(self, context):
+        try:
+            merge_armatures(self, context)
+        except Fatal as e:
+            self.report({"ERROR"}, str(e))
+        return {"FINISHED"}
+
+
+class DeleteNonNumericVertexGroups(Operator):
+    """Remove vertex groups with non-numeric names"""
+
+    bl_idname = "vertex_groups.delete_non_numeric"
+    bl_label = "Remove non-numeric vertex groups"
+    bl_options = {"UNDO"}
+
+    def execute(self, context):
+        try:
+            for obj in context.selected_objects:
+                for vg in reversed(obj.vertex_groups):
+                    if vg.name.isdecimal():
+                        continue
+                    print("Removing vertex group", vg.name)
+                    obj.vertex_groups.remove(vg)
+        except Fatal as e:
+            self.report({"ERROR"}, str(e))
+        return {"FINISHED"}
+
+
+class Preferences(AddonPreferences):
+    """Preferences updater"""
+
+    bl_idname = package_name
+    # Addon updater preferences.
+
+    auto_check_update: BoolProperty(
+        name="Auto-check for Update",
+        description="If enabled, auto-check for updates using an interval",
+        default=False,
+    )
+
+    updater_interval_months: IntProperty(
+        name="Months",
+        description="Number of months between checking for updates",
+        default=0,
+        min=0,
+    )
+
+    updater_interval_days: IntProperty(
+        name="Days",
+        description="Number of days between checking for updates",
+        default=7,
+        min=0,
+        max=31,
+    )
+
+    updater_interval_hours: IntProperty(
+        name="Hours",
+        description="Number of hours between checking for updates",
+        default=0,
+        min=0,
+        max=23,
+    )
+
+    updater_interval_minutes: IntProperty(
+        name="Minutes",
+        description="Number of minutes between checking for updates",
+        default=0,
+        min=0,
+        max=59,
+    )
 
     def draw(self, context):
-        pass
+        layout = self.layout
+        print(addon_updater_ops.get_user_preferences(context))
+        # Works best if a column, or even just self.layout.
+        mainrow = layout.row()
+        _ = mainrow.column()
+        # Updater draw function, could also pass in col as third arg.
+        addon_updater_ops.update_settings_ui(self, context)
 
-@orientation_helper(axis_forward='-Z', axis_up='Y')
-class QuickImport3DMigotoRaw(bpy.types.Operator, ImportHelper, IOOBJOrientationHelper):
-    """Import raw 3DMigoto vertex and index buffers"""
-    bl_idname = "import_mesh.quickimportxxmi_raw_buffers"
-    bl_label = "Import 3DMigoto Raw Buffers"
-    #bl_options = {'PRESET', 'UNDO'}
-    bl_options = {'UNDO'}
+        # Alternate draw function, which is more condensed and can be
+        # placed within an existing draw function. Only contains:
+        #   1) check for update/update now buttons
+        #   2) toggle for auto-check (interval will be equal to what is set above)
+        # addon_updater_ops.update_settings_ui_condensed(self, context, col)
 
-    filename_ext = '.vb;.ib'
-    filter_glob: StringProperty(
-            default='*.vb*;*.ib',
-            options={'HIDDEN'},
-            ) #type: ignore
-
-    files: CollectionProperty(
-            name="File Path",
-            type=bpy.types.OperatorFileListElement,
-            ) #type: ignore
-
-    flip_texcoord_v: BoolProperty(
-            name="Flip TEXCOORD V",
-            description="Flip TEXCOORD V axis during importing",
-            default=True,
-            ) #type: ignore
-
-    flip_winding: BoolProperty(
-            name="Flip Winding Order",
-            description="Flip winding order (face orientation) during importing. Try if the model doesn't seem to be shading as expected in Blender and enabling the 'Face Orientation' overlay shows **RED** (if it shows BLUE, try 'Flip Normal' instead). Not quite the same as flipping normals within Blender as this only reverses the winding order without flipping the normals. Recommended for Unreal Engine",
-            default=False,
-            ) #type: ignore
-
-    flip_normal: BoolProperty(
-            name="Flip Normal",
-            description="Flip Normals during importing. Try if the model doesn't seem to be shading as expected in Blender and enabling 'Face Orientation' overlay shows **BLUE** (if it shows RED, try 'Flip Winding Order' instead). Not quite the same as flipping normals within Blender as this won't reverse the winding order",
-            default=False,
-            ) #type: ignore
-
-    def get_vb_ib_paths(self, filename):
-        vb_bin_path = glob(os.path.splitext(filename)[0] + '.vb*')
-        ib_bin_path = os.path.splitext(filename)[0] + '.ib'
-        fmt_path = os.path.splitext(filename)[0] + '.fmt'
-        vgmap_path = os.path.splitext(filename)[0] + '.vgmap'
-        if len(vb_bin_path) < 1:
-            raise Fatal('Unable to find matching .vb* file(s) for %s' % filename)
-        if not os.path.exists(ib_bin_path):
-            ib_bin_path = None
-        if not os.path.exists(fmt_path):
-            fmt_path = None
-        if not os.path.exists(vgmap_path):
-            vgmap_path = None
-        return (vb_bin_path, ib_bin_path, fmt_path, vgmap_path)
-
-    def execute(self, context):
-        # I'm not sure how to find the Import3DMigotoReferenceInputFormat
-        # instance that Blender instantiated to pass the values from one
-        # import dialog to another, but since everything is modal we can
-        # just use globals:
-        global migoto_raw_import_options
-        migoto_raw_import_options = self.as_keywords(ignore=('filepath', 'files', 'filter_glob'))
-
-        done = set()
-        dirname = os.path.dirname(self.filepath)
-        for filename in self.files:
-            try:
-                (vb_path, ib_path, fmt_path, vgmap_path) = self.get_vb_ib_paths(os.path.join(dirname, filename.name))
-                vb_path_norm = set(map(os.path.normcase, vb_path))
-                if vb_path_norm.intersection(done) != set():
-                    continue
-                done.update(vb_path_norm)
-
-                if fmt_path is not None:
-                    import_3dmigoto_raw_buffers(self, context, fmt_path, fmt_path, vb_path=vb_path, ib_path=ib_path, vgmap_path=vgmap_path, **migoto_raw_import_options)
-                else:
-                    migoto_raw_import_options['vb_path'] = vb_path
-                    migoto_raw_import_options['ib_path'] = ib_path
-                    bpy.ops.import_mesh.migoto_input_format('INVOKE_DEFAULT')
-            except Fatal as e:
-                self.report({'ERROR'}, str(e))
-        return {'FINISHED'}
-
-class Import3DMigotoReferenceInputFormat(bpy.types.Operator, ImportHelper):
-    bl_idname = "import_mesh.migoto_input_format"
-    bl_label = "Select a .txt file with matching format"
-    bl_options = {'UNDO', 'INTERNAL'}
-
-    filename_ext = '.txt;.fmt'
-    filter_glob: StringProperty(
-            default='*.txt;*.fmt',
-            options={'HIDDEN'},
-            ) #type: ignore
-
-    def get_vb_ib_paths(self):
-        if os.path.splitext(self.filepath)[1].lower() == '.fmt':
-            return (self.filepath, self.filepath)
-
-        buffer_pattern = re.compile(r'''-(?:ib|vb[0-9]+)(?P<hash>=[0-9a-f]+)?(?=[^0-9a-f=])''')
-
-        dirname = os.path.dirname(self.filepath)
-        filename = os.path.basename(self.filepath)
-
-        match = buffer_pattern.search(filename)
-        if match is None:
-            raise Fatal('Reference .txt filename does not look like a 3DMigoto timestamped Frame Analysis Dump')
-        ib_pattern = filename[:match.start()] + '-ib*' + filename[match.end():]
-        vb_pattern = filename[:match.start()] + '-vb*' + filename[match.end():]
-        ib_paths = glob(os.path.join(dirname, ib_pattern))
-        vb_paths = glob(os.path.join(dirname, vb_pattern))
-        if len(ib_paths) < 1 or len(vb_paths) < 1:
-            raise Fatal('Unable to locate reference files for both vertex buffer and index buffer format descriptions')
-        return (vb_paths[0], ib_paths[0])
-
-    def execute(self, context):
-        global migoto_raw_import_options
-
-        try:
-            vb_fmt_path, ib_fmt_path = self.get_vb_ib_paths()
-            import_3dmigoto_raw_buffers(self, context, vb_fmt_path, ib_fmt_path, **migoto_raw_import_options)
-        except Fatal as e:
-            self.report({'ERROR'}, str(e))
-        return {'FINISHED'}
+        # Adding another column to help show the above condensed ui as one column
+        # col = mainrow.column()
+        # col.scale_y = 2
+        # ops = col.operator("wm.url_open","Open webpage ")
+        # ops.url=addon_updater_ops.updater.website

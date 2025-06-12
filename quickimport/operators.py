@@ -1,7 +1,7 @@
 
 import bpy #type: ignore
 import os
-from .modules.operators import QuickImportXXMIFrameAnalysis, QuickImport3DMigotoRaw
+from .modules.import_ops import QuickImportXXMIFrameAnalysis, QuickImport3DMigotoRaw
 from .texturehandling import TextureHandler, TextureHandler42
 from .preferences import *
 import re
