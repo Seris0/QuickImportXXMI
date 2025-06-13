@@ -6,7 +6,7 @@ import importlib
 bl_info = {
     "name": "XXMI Scripts & Quick Import",
     "author": "Gustav0, LeoTorreZ", 
-    "version": (3, 0, 5),
+    "version": (3, 0, 6),
     "blender": (3, 6, 2),
     "description": "Script Compilation",
     "category": "Object",
