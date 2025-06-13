@@ -216,8 +216,8 @@ class QuickImportBase:
             if area.type == 'VIEW_3D':
                 area.spaces.active.shading.type = 'MATERIAL'
         
-        if bpy.app.version >= (4, 2, 0):
-            bpy.data.scenes["Scene"].view_settings.view_transform = 'Khronos PBR Neutral'
+        # if bpy.app.version >= (4, 2, 0):
+        #     bpy.data.scenes["Scene"].view_settings.view_transform = 'Khronos PBR Neutral'
 
     def import_armature(self, context):
         try:

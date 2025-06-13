@@ -123,7 +123,7 @@ class QuickImportSettings(bpy.types.PropertyGroup):
     )#type: ignore 
     flip_mesh: BoolProperty(
         name="Flip Mesh",
-        default=True,
+        default=False,
         description="Flips mesh over x-axis on import"
     ) #type: ignore 
     reset_rotation: BoolProperty(
