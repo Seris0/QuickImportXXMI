@@ -1,6 +1,6 @@
 import bpy  # type: ignore
 from .tools.tools_operators import classes as quick_import_classes, menu_func
-from .xxmi_scripts import *
+from .ui import *
 from .quickimport.operators import *
 from .quickimport.preferences import *
 

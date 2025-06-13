@@ -20,11 +20,11 @@ class XXMI_TOOLS_PT_main_panel(bpy.types.Panel):
         
 
         # GitHub link button and version info
-        box = layout.box()
-        github_row = box.row(align=True)
-        github_row.label(text=f"XXMI Scripts | Current Version: v{'.'.join(map(str, bl_info['version']))}", icon='INFO')
-        github_row.alignment = 'EXPAND'
-        github_row.operator("wm.url_open", text="", icon='URL', emboss=False).url = "https://github.com/Seris0/Gustav0/tree/main/Addons/QuickImportXXMI"
+        # box = layout.box()
+        # github_row = box.row(align=True)
+        # github_row.label(text=f"XXMI Scripts | Current Version: v{'.'.join(map(str, bl_info['version']))}", icon='INFO')
+        # github_row.alignment = 'EXPAND'
+        # github_row.operator("wm.url_open", text="", icon='URL', emboss=False).url = "https://github.com/Seris0/Gustav0/tree/main/Addons/QuickImportXXMI"
 
         # Main Tools Section
         box = layout.box()
@@ -217,6 +217,14 @@ class XXMI_TOOLS_PT_quick_import_panel(bpy.types.Panel):
     bl_region_type = 'UI'
     bl_category = 'XXMI Scripts'
  
+
+
+    def draw_header(self, context):
+        layout = self.layout
+        row = layout.row()
+        row.alignment = 'RIGHT'
+        row.label(text="v"+".".join(str(i) for i in bl_info.get('version', (0, 0, 0))))
+
     def draw(self, context):
         layout = self.layout
         cfg = context.scene.quick_import_settings
