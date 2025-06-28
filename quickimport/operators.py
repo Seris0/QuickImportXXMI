@@ -72,7 +72,7 @@ class QuickImportBase:
                     print(f"No valid combined name found in {obj.name} to match materials")
 
     def extract_combined_name(self, name):
-        keywords = ['Body', 'Head', 'Arm', 'Leg', 'Dress', 'Extra', 'Extras', 'Hair', 'Mask', 'Idle']
+        keywords = ['Body', 'Head', 'Arm', 'Leg', 'Dress', 'Extra', 'Extras', 'Hair', 'Mask', 'Idle', 'Face']
         for keyword in keywords:
             if keyword.lower() in name.lower():
                 # Find the actual keyword in the original case
