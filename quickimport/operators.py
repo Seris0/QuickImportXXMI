@@ -72,7 +72,7 @@ class QuickImportBase:
                     print(f"No valid combined name found in {obj.name} to match materials")
 
     def extract_combined_name(self, name):
-        keywords = ['Body', 'Head', 'Arm', 'Leg', 'Dress', 'Extra', 'Extras', 'Hair', 'Mask', 'Idle', 'Face']
+        keywords = ['Body', 'Head', 'Arm', 'Leg', 'Dress', 'Extra', 'Extras', 'Hair', 'Mask', 'Idle', 'Face', 'Wings']
         for keyword in keywords:
             if keyword.lower() in name.lower():
                 # Find the actual keyword in the original case
@@ -366,6 +366,10 @@ CHARACTER_NAME_MAPPING = {
     "HutaoLaden": "HutaoCherry",
     "HutaoCherriesSnowLaden": "HutaoCherry",
     "HutaoCherriesSnow": "HutaoCherry",
+    "PhainonAlt": "PhainonDemiurge",
+    "PhainonKhaslana": "PhainonDemiurge",
+    "Khaslana": "PhainonDemiurge",
+    "PhainonUlt": "PhainonDemiurge",
 
 
     
@@ -373,7 +377,7 @@ CHARACTER_NAME_MAPPING = {
 }
 
 COMMON_PARTS = ['PonyTail', 'Body', 'Head', 'Arm', 'Leg', 'Dress', 'Extra', 'Extras', 'Hair', 'Mask', 'Idle', 'Eyes', 'Coat', 'JacketHead', 'JacketBody', 'Jacket',
-'Hat', 'HatHead', 'HatBody']
+'Hat', 'HatHead', 'HatBody', 'BackHair', 'Wings']
 
 
 class QuickImportArmature(bpy.types.Operator):
@@ -648,5 +652,3 @@ class SavePreferencesOperator(bpy.types.Operator):
 def menu_func_import(self, context):
     self.layout.operator(QuickImport.bl_idname, text="Quick Import for XXMI")   
     self.layout.operator(QuickImportRaw.bl_idname, text="Quick Import Raw for XXMI")
-
-
